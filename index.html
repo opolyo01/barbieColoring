@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Barbie drawings</title>
+	<meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no">
+	
+	<link rel="stylesheet" href="http://code.jquery.com/mobile/1.1.0/jquery.mobile-1.1.0.min.css" />
+	<style>
+	.container{display: -webkit-box;-webkit-box-orient: horizontal;}
+	.tools{-webkit-box-flex: 0;width:100px;margin-right:10px;margin-top:20px;margin-left:10px;}
+	.canvasDiv{-webkit-box-flex: 1;margin-left:10px;}
+	.tools .color{width:30px;height:30px;margin-top:10px;display:inline-block;}
+	.purple{background:#cb3594;}
+	.green{background:#659b41;}
+	.yellow{background:#ffcf33;}
+	.brown{background:#986928;}
+	.pink{background:#ff00cc;}
+	.black{background:#000;}
+	.nocolor{background:#df4b26;margin-top:20px;height:60px;width:100px;margin-bottom:40px;}
+	.nostyle{width:20px;height:20px;}
+	#page1 a{margin-left:10px;margin-bottom:30px;display:inline-block;}
+	#page1 img{border:solid 2px black;}
+	#page1{background:#fff;}
+	</style>
+	<script src="http://code.jquery.com/jquery-1.7.1.min.js"></script>
+	<script src="http://code.jquery.com/mobile/1.1.0/jquery.mobile-1.1.0.min.js"></script>
+	<script src="colorPicker.js" type="text/javascript" charset="utf-8"></script>
+  </head>
+  <body>
+	<div data-role="page" id="page1">
+		<h1 style="margin-left:200px;color:#ff00cc;">Barbie color book</h1>
+		<a href="#page2" data-transition="pop" attr="barbie47.jpg"><img src="images/barbie47_m.jpg"></a>
+		<a href="#page2" data-transition="pop" attr="barbie61.jpg"><img src="images/Barbie_67_m.jpg"></a>
+		<a href="#page2" data-transition="pop" attr="barbie65.jpg"><img src="images/Barbie_68_m.jpg"></a>
+		<a href="#page2" data-transition="pop" attr="barbie50.jpg"><img src="images/Barbie_69_m.jpg"></a>
+		
+		<a href="#page2" data-transition="pop" attr="Barbie_70.png"><img src="images/Barbie_70_m.jpg"></a>
+		<a href="#page2" data-transition="pop" attr="fashion.png"><img src="images/barbie62_m.jpg"></a>
+		<a href="#page2" data-transition="pop" attr="fashion.png"><img src="images/barbie63_m.jpg"></a>
+		<a href="#page2" data-transition="pop" attr="fashion.png"><img src="images/barbie64_m.jpg"></a>
+		
+		<a href="#page2" data-transition="pop" attr="fashion.png"><img src="images/barbie65_m.jpg"></a>
+		<a href="#page2" data-transition="pop" attr="fashion.png"><img src="images/barbie59_m.jpg"></a>
+		<a href="#page2" data-transition="pop" attr="fashion.png"><img src="images/barbie60_m.jpg"></a>
+		<a href="#page2" data-transition="pop" attr="fashion.png"><img src="images/barbie64_m.jpg"></a>
+	</div>
+	
+	<div data-role="page" id="page2">
+		<a href="#page1" data-role="button" data-transition="pop" class="homeButton">Home</a>
+		<div class="container">
+			<div class="tools">
+				<div class="purple color"></div>
+				<div class="green color"></div>
+				<div class="yellow color"></div>
+				<div class="brown color"></div>
+				<div class="pink color"></div>
+				<div class="black color"></div>
+				<a href="#" data-icon="delete" data-role="button"  class="white">&nbsp;</a>
+				<div class="nocolor"></div>
+				<div data-role="controlgroup" class="drawingSize">
+					<a href="#" data-role="button" attr="small">Small</a>
+					<a href="#" data-role="button" attr="normal" class="ui-btn-active">Normal</a>
+					<a href="#" data-role="button" attr="large">Large</a>
+					<a href="#" data-role="button" attr="huge">Huge</a>
+				</div>
+			</div>
+			<div class="canvasDiv">
+				<!-- <img width="600" height="800" id="canvasImg" title="right click to save"/> -->
+				<canvas width="600" height="800" id="canvas">
+				</canvas>
+			</div>
+		</div>
+	</div>
+	
+    <script type="text/javascript">
+		//567, 794
+		var canvas = document.getElementById('canvas'),
+			context = canvas.getContext("2d"),
+			colorPurple = "#cb3594",
+			colorGreen = "#659b41",
+			colorYellow = "#ffcf33",
+			colorBrown = "#986928",
+			colorPink = "#ff00cc",
+			colorBlack = "#000",
+			colorWhite = "#fff",
+			currentColor = "#df4b26",
+			drawingAreaX = 10,
+			drawingAreaY = 10,
+			canvasWidth = 600,
+			canvasHeight = 800,
+			drawingAreaWidth = 560,
+			drawingAreaHeight = 790,
+			clickX = [],
+			clickY = [],
+			clickDrag = [],
+			clickColor = [],
+			clickSize = [],
+			curSize = "normal",
+			paint = false,
+			outlineImage = new Image();
+		
+		outlineImage.src = "images/barbie47.jpg";
+		outlineImage.onload = drawImage;
+		
+		$(".homeButton").click(function(evt){
+			console.log("home button clicked");
+			clickX = [];
+			clickY = [];
+			clickDrag = [];
+			clickColor = [];
+			clickSize = [];
+			redraw();
+		});
+		
+		$("#page1 a").click(function(evt){
+			outlineImage.src = "images/"+evt.currentTarget.getAttribute("attr");
+		});
+		
+		$(".nocolor").CanvasColorPicker({
+              onColorChange:function(rgb,hsv){
+                //$("a").css("color","RGB(" + rgb.r + "," + rgb.g  + "," + rgb.b + ")");
+				currentColor = "RGB(" + rgb.r + "," + rgb.g  + "," + rgb.b + ")";
+              }
+        });
+		$(".drawingSize").delegate("a", "click", sizeHandler);
+		
+		$(".purple").click(function(evt){
+			$(".nocolor").css("background", colorPurple);
+			currentColor = colorPurple;
+		});
+		$(".green").click(function(evt){
+			$(".nocolor").css("background", colorGreen);
+			currentColor = colorGreen;
+		});
+		$(".yellow").click(function(evt){
+			$(".nocolor").css("background", colorYellow);
+			currentColor = colorYellow;
+		});
+		$(".brown").click(function(evt){
+			$(".nocolor").css("background", colorBrown);
+			currentColor = colorBrown;
+		});
+		$(".pink").click(function(evt){
+			$(".nocolor").css("background", colorPink);
+			currentColor = colorPink;
+		});
+		$(".black").click(function(evt){
+			$(".nocolor").css("background", colorBlack);
+			currentColor = colorBlack;
+		});
+		$(".white").click(function(evt){
+			$(".nocolor").css("background", colorWhite);
+			currentColor = colorWhite;
+		});
+		// Add mouse event listeners to canvas element
+		canvas.addEventListener("mousedown", press, false);
+		canvas.addEventListener("mousemove", drag, false);
+		canvas.addEventListener("mouseup", stopPaint);
+		canvas.addEventListener("mouseout", stopPaint, false);
+		
+		// Add touch event listeners to canvas element
+		canvas.addEventListener("touchstart", press, false);
+		canvas.addEventListener("touchmove", drag, false);
+		canvas.addEventListener("touchend", stopPaint, false);
+		canvas.addEventListener("touchcancel", stopPaint, false);
+		
+		function sizeHandler(evt){
+			var currentTarget = evt.currentTarget,
+				size = currentTarget.getAttribute("attr");
+			
+			$('.drawingSize a').removeClass('ui-btn-active incative');
+			$(currentTarget).addClass("ui-btn-active");
+			
+			curSize = size;
+			console.log(curSize);
+		}
+		function press(e){
+			var mouseX = e.pageX - this.offsetLeft;
+			var mouseY = e.pageY - this.offsetTop;
+			paint = true;
+			$(".canvas-color-picker").css("visibility", "hidden");
+		  	addClick(mouseX, mouseY);
+		}
+		
+		function drag(e) {
+			if(paint){
+				var mouseX = e.pageX - this.offsetLeft;
+				var mouseY = e.pageY - this.offsetTop;
+			    addClick(mouseX, mouseY, true);
+			}
+			e.preventDefault();
+		}
+		
+		function addClick(x, y, dragging)
+		{
+		  	clickX.push(x);
+		  	clickY.push(y);
+		  	clickDrag.push(dragging);
+			clickColor.push(currentColor);
+			clickSize.push(curSize);
+			redraw();
+		}
+		
+		function redraw(){
+		  	canvas.width = canvas.width; // Clears the canvas
+			drawImage();
+		  	context.lineJoin = "round";
+
+		  	for(var i=0; i < clickX.length; i++)
+		  	{
+				var radius;
+				switch (clickSize[i]) {
+					case "small":
+						radius = 5;
+						break;
+					case "normal":
+						radius = 10;
+						break;
+					case "large":
+						radius = 20;
+						break;
+					case "huge":
+						radius = 30;
+						break;
+					default:
+						break;
+				}	
+		    	context.beginPath();
+		    	if(clickDrag[i] && i){
+		      		context.moveTo(clickX[i-1], clickY[i-1]);
+		     	}
+				else {
+		       		context.moveTo(clickX[i]-1, clickY[i]);
+		     	}
+		     	context.lineTo(clickX[i], clickY[i]);
+		     	context.closePath();
+				context.strokeStyle = clickColor[i];
+				context.lineWidth = radius;
+		     	context.stroke();
+				//var imgSrc = canvas.toDataURL("data:image/gif;base64");
+				//$('#canvasImg').attr('src', imgSrc);
+		  	}
+		}
+		
+		function stopPaint(e){
+			paint = false;
+		}
+		function drawImage() {
+			context.drawImage(outlineImage, drawingAreaX, drawingAreaY, drawingAreaWidth, drawingAreaHeight);
+		}
+	</script>
+  </body>
+</html>
