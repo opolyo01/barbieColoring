@@ -1,0 +1,83 @@
+const BASE = import.meta.env.VITE_API_URL ?? '';
+
+async function request<T>(
+  path: string,
+  options: RequestInit & { token?: string } = {},
+): Promise<T> {
+  const { token, ...init } = options;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(init.headers as Record<string, string> ?? {}),
+  };
+  const res = await fetch(`${BASE}/api${path}`, { ...init, headers });
+  const data = await res.json() as T & { error?: string };
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
+  return data;
+}
+
+export const api = {
+  auth: {
+    register: (email: string, displayName: string, password: string) =>
+      request<{ user: import('../types').User; token: string }>('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ email, displayName, password }),
+      }),
+    login: (email: string, password: string) =>
+      request<{ user: import('../types').User; token: string }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      }),
+  },
+
+  competitions: {
+    list: (token: string) =>
+      request<import('../types').Competition[]>('/competitions', { token }),
+    get: (id: string, token: string) =>
+      request<import('../types').Competition>(`/competitions/${id}`, { token }),
+    create: (
+      token: string,
+      body: { name: string; description?: string; startDate: string; endDate: string; startingBalance: number },
+    ) =>
+      request<import('../types').Competition>('/competitions', {
+        method: 'POST',
+        token,
+        body: JSON.stringify(body),
+      }),
+    join: (id: string, token: string) =>
+      request<{ ok: boolean }>(`/competitions/${id}/join`, { method: 'POST', token }),
+    leaderboard: (id: string, token: string) =>
+      request<import('../types').LeaderboardEntry[]>(`/competitions/${id}/leaderboard`, { token }),
+  },
+
+  orders: {
+    place: (
+      token: string,
+      body: {
+        competitionId: string;
+        symbol: string;
+        side: string;
+        qty: number;
+        orderType: string;
+        limitPrice?: number;
+      },
+    ) =>
+      request<import('../types').Order>('/orders', { method: 'POST', token, body: JSON.stringify(body) }),
+    history: (competitionId: string, token: string) =>
+      request<import('../types').Order[]>(`/orders/history/${competitionId}`, { token }),
+  },
+
+  portfolio: {
+    get: (competitionId: string, token: string) =>
+      request<{
+        portfolio: import('../types').Portfolio;
+        holdings: import('../types').Holding[];
+        prices: Record<string, number>;
+      }>(`/portfolio/${competitionId}`, { token }),
+  },
+
+  symbols: {
+    list: (token: string) =>
+      request<import('../types').SymbolInfo[]>('/symbols', { token }),
+  },
+};
