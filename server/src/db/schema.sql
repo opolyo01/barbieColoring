@@ -4,10 +4,14 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE IF NOT EXISTS users (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email         TEXT UNIQUE NOT NULL,
+  email         TEXT NOT NULL,
   display_name  TEXT NOT NULL,
-  password_hash TEXT NOT NULL,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  password_hash TEXT,                         -- null for OAuth users
+  provider      TEXT,                         -- 'google' | 'facebook'
+  provider_id   TEXT,                         -- provider's user ID
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (email),
+  UNIQUE (provider, provider_id)
 );
 
 CREATE TABLE IF NOT EXISTS competitions (

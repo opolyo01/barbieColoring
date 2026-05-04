@@ -1,70 +1,172 @@
 import { Router, Request, Response } from 'express';
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import pool from '../db/pool';
 import { User } from '../types';
 
 const router = Router();
 
-router.post('/register', async (req: Request, res: Response) => {
-  const { email, displayName, password } = req.body as {
-    email?: string;
-    displayName?: string;
-    password?: string;
-  };
+const JWT_SECRET = () => process.env.JWT_SECRET ?? 'secret';
+const SERVER_URL = () => process.env.SERVER_URL ?? 'http://localhost:4000';
+const CLIENT_ORIGIN = () => process.env.CLIENT_ORIGIN ?? 'http://localhost:3000';
 
-  if (!email || !displayName || !password) {
-    res.status(400).json({ error: 'email, displayName, and password are required' });
-    return;
-  }
-  if (password.length < 8) {
-    res.status(400).json({ error: 'Password must be at least 8 characters' });
-    return;
-  }
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
-  const passwordHash = await bcrypt.hash(password, 12);
+function issueAppToken(userId: string): string {
+  return jwt.sign({ userId }, JWT_SECRET(), { expiresIn: '30d' });
+}
+
+// Signed, expiring state param — prevents CSRF without needing server-side sessions
+function generateState(): string {
+  return jwt.sign({ nonce: crypto.randomBytes(16).toString('hex') }, JWT_SECRET(), { expiresIn: '10m' });
+}
+
+function verifyState(state: string): boolean {
+  try {
+    jwt.verify(state, JWT_SECRET());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function upsertOAuthUser(
+  provider: string,
+  providerId: string,
+  displayName: string,
+  email: string,
+): Promise<User> {
+  const { rows } = await pool.query<User>(
+    `INSERT INTO users (email, display_name, provider, provider_id)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (provider, provider_id)
+     DO UPDATE SET
+       display_name = EXCLUDED.display_name,
+       email        = EXCLUDED.email
+     RETURNING id, email, display_name, created_at`,
+    [email, displayName.trim(), provider, providerId],
+  );
+  return rows[0];
+}
+
+function redirectError(res: Response, message: string): void {
+  res.redirect(`${CLIENT_ORIGIN()}/login?error=${encodeURIComponent(message)}`);
+}
+
+// ─── Google ──────────────────────────────────────────────────────────────────
+
+router.get('/google', (_req: Request, res: Response) => {
+  const params = new URLSearchParams({
+    client_id:     process.env.GOOGLE_CLIENT_ID ?? '',
+    redirect_uri:  `${SERVER_URL()}/api/auth/google/callback`,
+    response_type: 'code',
+    scope:         'openid email profile',
+    access_type:   'online',
+    state:         generateState(),
+  });
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+});
+
+router.get('/google/callback', async (req: Request, res: Response) => {
+  const { code, state, error } = req.query as Record<string, string>;
+
+  if (error) { redirectError(res, 'Google sign-in was cancelled'); return; }
+  if (!verifyState(state ?? '')) { redirectError(res, 'Invalid OAuth state'); return; }
+  if (!code) { redirectError(res, 'No auth code received'); return; }
 
   try {
-    const { rows } = await pool.query<User>(
-      `INSERT INTO users (email, display_name, password_hash) VALUES ($1, $2, $3) RETURNING id, email, display_name, created_at`,
-      [email.toLowerCase().trim(), displayName.trim(), passwordHash],
-    );
-    const user = rows[0];
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET ?? 'secret', { expiresIn: '7d' });
-    res.status(201).json({ user, token });
-  } catch (err: unknown) {
-    const pgErr = err as { code?: string };
-    if (pgErr.code === '23505') {
-      res.status(409).json({ error: 'Email already registered' });
-      return;
-    }
-    throw err;
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id:     process.env.GOOGLE_CLIENT_ID ?? '',
+        client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+        redirect_uri:  `${SERVER_URL()}/api/auth/google/callback`,
+        grant_type:    'authorization_code',
+      }),
+    });
+    const tokenData = await tokenRes.json() as { access_token?: string; error?: string };
+    if (!tokenData.access_token) { redirectError(res, 'Failed to get Google token'); return; }
+
+    const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+    const profile = await profileRes.json() as { sub?: string; name?: string; email?: string };
+    if (!profile.sub || !profile.email) { redirectError(res, 'Could not read Google profile'); return; }
+
+    const user = await upsertOAuthUser('google', profile.sub, profile.name ?? profile.email, profile.email);
+    const token = issueAppToken(user.id);
+    res.redirect(`${CLIENT_ORIGIN()}/auth/callback?token=${token}`);
+  } catch (err) {
+    console.error('Google OAuth error:', err);
+    redirectError(res, 'Google sign-in failed');
   }
 });
 
-router.post('/login', async (req: Request, res: Response) => {
-  const { email, password } = req.body as { email?: string; password?: string };
-  if (!email || !password) {
-    res.status(400).json({ error: 'email and password are required' });
-    return;
-  }
+// ─── Facebook ────────────────────────────────────────────────────────────────
 
-  const { rows } = await pool.query<User & { password_hash: string }>(
-    'SELECT * FROM users WHERE email = $1',
-    [email.toLowerCase().trim()],
-  );
-  const user = rows[0];
-
-  if (!user || !(await bcrypt.compare(password, user.password_hash))) {
-    res.status(401).json({ error: 'Invalid credentials' });
-    return;
-  }
-
-  const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET ?? 'secret', { expiresIn: '7d' });
-  res.json({
-    user: { id: user.id, email: user.email, display_name: user.display_name, created_at: user.created_at },
-    token,
+router.get('/facebook', (_req: Request, res: Response) => {
+  const params = new URLSearchParams({
+    client_id:    process.env.FACEBOOK_APP_ID ?? '',
+    redirect_uri: `${SERVER_URL()}/api/auth/facebook/callback`,
+    scope:        'email,public_profile',
+    state:        generateState(),
   });
+  res.redirect(`https://www.facebook.com/v19.0/dialog/oauth?${params}`);
+});
+
+router.get('/facebook/callback', async (req: Request, res: Response) => {
+  const { code, state, error } = req.query as Record<string, string>;
+
+  if (error) { redirectError(res, 'Facebook sign-in was cancelled'); return; }
+  if (!verifyState(state ?? '')) { redirectError(res, 'Invalid OAuth state'); return; }
+  if (!code) { redirectError(res, 'No auth code received'); return; }
+
+  try {
+    const tokenUrl = new URL('https://graph.facebook.com/v19.0/oauth/access_token');
+    tokenUrl.searchParams.set('client_id',     process.env.FACEBOOK_APP_ID ?? '');
+    tokenUrl.searchParams.set('redirect_uri',  `${SERVER_URL()}/api/auth/facebook/callback`);
+    tokenUrl.searchParams.set('client_secret', process.env.FACEBOOK_APP_SECRET ?? '');
+    tokenUrl.searchParams.set('code',          code);
+
+    const tokenRes = await fetch(tokenUrl.toString());
+    const tokenData = await tokenRes.json() as { access_token?: string; error?: { message: string } };
+    if (!tokenData.access_token) { redirectError(res, 'Failed to get Facebook token'); return; }
+
+    const profileRes = await fetch(
+      `https://graph.facebook.com/v19.0/me?fields=id,name,email&access_token=${tokenData.access_token}`,
+    );
+    const profile = await profileRes.json() as { id?: string; name?: string; email?: string };
+    if (!profile.id) { redirectError(res, 'Could not read Facebook profile'); return; }
+
+    const email = profile.email ?? `fb_${profile.id}@tradebattle.app`;
+    const user = await upsertOAuthUser('facebook', profile.id, profile.name ?? email, email);
+    const token = issueAppToken(user.id);
+    res.redirect(`${CLIENT_ORIGIN()}/auth/callback?token=${token}`);
+  } catch (err) {
+    console.error('Facebook OAuth error:', err);
+    redirectError(res, 'Facebook sign-in failed');
+  }
+});
+
+// ─── /me — resolve JWT → user profile ───────────────────────────────────────
+
+router.get('/me', async (req: Request, res: Response) => {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing token' }); return; }
+
+  try {
+    const { userId } = jwt.verify(header.slice(7), JWT_SECRET()) as { userId: string };
+    const { rows } = await pool.query<User>(
+      'SELECT id, email, display_name, created_at FROM users WHERE id = $1',
+      [userId],
+    );
+    if (!rows[0]) { res.status(404).json({ error: 'User not found' }); return; }
+    res.json(rows[0]);
+  } catch {
+    res.status(401).json({ error: 'Invalid token' });
+  }
 });
 
 export default router;

@@ -6,6 +6,31 @@ Compete against others using a virtual trading book. Each user gets a configurab
 
 ---
 
+## OAuth Setup (required before first run)
+
+Authentication uses Google and Facebook OAuth — no username/password.
+
+### Google
+1. Go to [console.cloud.google.com](https://console.cloud.google.com)
+2. Create a project → **APIs & Services** → **Credentials** → **Create OAuth 2.0 Client ID**
+3. Application type: **Web application**
+4. Add Authorised redirect URI:
+   - Local: `http://localhost:4000/api/auth/google/callback`
+   - Production: `https://your-server.railway.app/api/auth/google/callback`
+5. Copy **Client ID** and **Client Secret** → set in `server/.env`
+
+### Facebook
+1. Go to [developers.facebook.com](https://developers.facebook.com) → **Create App** → **Consumer**
+2. Add **Facebook Login** product → **Settings**
+3. Add Valid OAuth Redirect URI:
+   - Local: `http://localhost:4000/api/auth/facebook/callback`
+   - Production: `https://your-server.railway.app/api/auth/facebook/callback`
+4. Copy **App ID** and **App Secret** from **App Settings → Basic** → set in `server/.env`
+
+> For local dev Facebook requires HTTPS by default. Use [ngrok](https://ngrok.com) to tunnel `localhost:4000` and use the ngrok URL as `SERVER_URL`.
+
+---
+
 ## Running Locally
 
 ### Prerequisites
@@ -26,7 +51,7 @@ This starts:
 
 ```bash
 cd server
-cp .env.example .env       # defaults work for local Docker setup
+cp .env.example .env       # fill in GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, FACEBOOK_APP_ID, FACEBOOK_APP_SECRET
 npm install
 npm run dev                # http://localhost:4000  |  ws://localhost:4001
 ```
@@ -42,7 +67,7 @@ npm install
 npm run dev                # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000), register an account, create a competition, and start trading.
+Open [http://localhost:3000](http://localhost:3000), sign in with Google or Facebook, create a competition, and start trading.
 
 ### Stopping
 
@@ -76,17 +101,21 @@ JWT_SECRET          = <any random 32+ character string>
 KAFKA_BROKERS       = <Upstash bootstrap URL>
 KAFKA_USERNAME      = <Upstash username>
 KAFKA_PASSWORD      = <Upstash password>
+SERVER_URL          = https://your-server.railway.app
 CLIENT_ORIGIN       = https://your-app.vercel.app
+GOOGLE_CLIENT_ID    = <from Google Console>
+GOOGLE_CLIENT_SECRET= <from Google Console>
+FACEBOOK_APP_ID     = <from Facebook Developer>
+FACEBOOK_APP_SECRET = <from Facebook Developer>
 PORT                = 4000
-WS_PORT             = 4001
+WS_PORT             = 4000
 TICK_INTERVAL_MS    = 1000
 ```
 
 5. Set build command: `npm install && npm run build`
 6. Set start command: `npm start`
-7. Note your Railway public URL (e.g. `https://trading-server.railway.app`)
 
-> **WebSocket on Railway:** Railway proxies WebSocket connections on the same port as HTTP. Set `WS_PORT=4000` to match `PORT` when deploying on Railway.
+> **WebSocket on Railway:** Set `WS_PORT=4000` to match `PORT` — Railway proxies both HTTP and WebSocket on the same port.
 
 ### Step 3 — Vercel (client)
 
@@ -114,11 +143,16 @@ VITE_WS_URL    = wss://your-server.railway.app
 | `PORT` | HTTP server port | `4000` |
 | `WS_PORT` | WebSocket server port | `4001` |
 | `JWT_SECRET` | Secret for signing JWTs | — |
+| `SERVER_URL` | Public URL of this server | `http://localhost:4000` |
+| `CLIENT_ORIGIN` | Frontend URL (CORS + OAuth redirect) | `http://localhost:3000` |
 | `DATABASE_URL` | PostgreSQL connection string | — |
 | `KAFKA_BROKERS` | Comma-separated broker addresses | `localhost:9092` |
 | `KAFKA_USERNAME` | Kafka SASL username (Upstash) | — |
 | `KAFKA_PASSWORD` | Kafka SASL password (Upstash) | — |
-| `CLIENT_ORIGIN` | CORS allowed origin | `*` |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID | — |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | — |
+| `FACEBOOK_APP_ID` | Facebook app ID | — |
+| `FACEBOOK_APP_SECRET` | Facebook app secret | — |
 | `TICK_INTERVAL_MS` | Price tick frequency in ms | `1000` |
 
 ### Client (`client/.env`)
