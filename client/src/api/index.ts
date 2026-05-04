@@ -18,16 +18,8 @@ async function request<T>(
 
 export const api = {
   auth: {
-    register: (email: string, displayName: string, password: string) =>
-      request<{ user: import('../types').User; token: string }>('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({ email, displayName, password }),
-      }),
-    login: (email: string, password: string) =>
-      request<{ user: import('../types').User; token: string }>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      }),
+    me: (token: string) =>
+      request<import('../types').User>('/auth/me', { token }),
   },
 
   competitions: {
