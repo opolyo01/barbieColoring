@@ -1,5 +1,3 @@
-import { Request } from 'express';
-
 export interface User {
   id: string;
   email: string;
@@ -77,6 +75,8 @@ export interface Trade {
 export interface PriceTick {
   symbol: string;
   price: number;
+  bid: number;
+  ask: number;
   open: number;
   high: number;
   low: number;
@@ -110,6 +110,10 @@ export type WsClientMessage =
   | { type: 'subscribe'; competitionId: string }
   | { type: 'unsubscribe'; competitionId: string };
 
-export interface AuthenticatedRequest extends Request {
-  userId: string;
+declare global {
+  namespace Express {
+    interface Request {
+      userId?: string;
+    }
+  }
 }

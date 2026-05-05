@@ -58,6 +58,40 @@ export interface Order {
   filled_at: string | null;
 }
 
+export interface CompetitionAdminParticipant {
+  user_id: string;
+  email: string;
+  display_name: string;
+  joined_at: string;
+  cash_balance: number;
+  portfolio_value: number;
+  pnl: number;
+  pnl_pct: number;
+  gross_semv: number;
+  net_semv: number;
+  open_positions: number;
+  pending_orders: number;
+  is_creator: boolean;
+}
+
+export interface CompetitionAdminTrade {
+  id: string;
+  order_id: string;
+  user_id: string;
+  display_name: string;
+  symbol: string;
+  side: OrderSide;
+  qty: number;
+  fill_price: number;
+  filled_at: string;
+}
+
+export interface CompetitionAdminSnapshot {
+  competition: Competition;
+  participants: CompetitionAdminParticipant[];
+  trades: CompetitionAdminTrade[];
+}
+
 export interface LeaderboardEntry {
   rank: number;
   user_id: string;
@@ -72,6 +106,8 @@ export interface LeaderboardEntry {
 export interface PriceTick {
   symbol: string;
   price: number;
+  bid: number;
+  ask: number;
   open: number;
   high: number;
   low: number;

@@ -14,12 +14,18 @@ function statusBadge(status: Competition['status']) {
 }
 
 export default function Competitions() {
-  const { token } = useAuth();
+  const { token, user, logout } = useAuth();
   const navigate = useNavigate();
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [joining, setJoining] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  function handleLogout() {
+    logout();
+    navigate('/login');
+  }
 
   // Create form state
   const [form, setForm] = useState({
@@ -36,6 +42,19 @@ export default function Competitions() {
     if (!token) return;
     api.competitions.list(token).then(setCompetitions).finally(() => setLoading(false));
   }, [token]);
+
+  async function handleDelete(id: string) {
+    if (!token || !window.confirm('Delete this competition? This cannot be undone.')) return;
+    setDeleting(id);
+    try {
+      await api.competitions.delete(id, token);
+      setCompetitions((prev) => prev.filter((c) => c.id !== id));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete');
+    } finally {
+      setDeleting(null);
+    }
+  }
 
   async function handleJoin(id: string) {
     if (!token) return;
@@ -79,12 +98,28 @@ export default function Competitions() {
           <span className="text-xl">📈</span>
           <span className="font-bold text-white">TradeBattle</span>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="bg-accent hover:bg-blue-400 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-        >
-          + New Competition
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowCreate(true)}
+            className="bg-accent hover:bg-blue-400 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+          >
+            + New Competition
+          </button>
+          {user && (
+            <div className="flex items-center gap-2 border-l border-border pl-3">
+              <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/40 flex items-center justify-center text-sm font-bold text-accent">
+                {user.display_name.charAt(0).toUpperCase()}
+              </div>
+              <span className="text-gray-300 text-sm hidden sm:block">{user.display_name}</span>
+              <button
+                onClick={handleLogout}
+                className="text-xs text-gray-400 hover:text-white transition-colors px-2 py-1 rounded border border-border hover:border-gray-500"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="max-w-4xl mx-auto p-6">
@@ -117,6 +152,14 @@ export default function Competitions() {
                   </div>
                 </div>
                 <div className="flex gap-2 ml-4 shrink-0">
+                  {c.created_by === user?.id && (
+                    <button
+                      onClick={() => navigate(`/competition/${c.id}/admin`)}
+                      className="border border-border hover:border-gray-500 text-gray-300 hover:text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                    >
+                      Admin
+                    </button>
+                  )}
                   {c.enrolled ? (
                     <button
                       onClick={() => navigate(`/competition/${c.id}`)}
@@ -131,6 +174,16 @@ export default function Competitions() {
                       className="bg-accent hover:bg-blue-400 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
                     >
                       {joining === c.id ? 'Joining...' : 'Join'}
+                    </button>
+                  )}
+                  {c.created_by === user?.id && (
+                    <button
+                      onClick={() => handleDelete(c.id)}
+                      disabled={deleting === c.id}
+                      className="text-gray-500 hover:text-red-400 disabled:opacity-50 text-sm px-2 py-2 rounded-lg border border-transparent hover:border-red-500/30 transition-colors"
+                      title="Delete competition"
+                    >
+                      {deleting === c.id ? '…' : '🗑'}
                     </button>
                   )}
                 </div>

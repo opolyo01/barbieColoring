@@ -1,8 +1,10 @@
 import kafka, { TOPICS } from './client';
 import { publishOrderFilled } from './producer';
-import { fillOrder, rejectOrder, recordTrade, getPendingLimitOrders } from '../db/queries/orders';
-import { getPortfolio, applyFill } from '../db/queries/portfolio';
-import { Order } from '../types';
+import { fillOrder, rejectOrder, recordTrade, getAllPendingLimitOrders, getAllPendingMarketOrders } from '../db/queries/orders';
+import { getPortfolio, getHoldings, applyFill } from '../db/queries/portfolio';
+import { getCompetition } from '../db/queries/competitions';
+import { sendToUser } from '../ws/server';
+import { Holding, Order } from '../types';
 
 // In-memory latest prices (updated on every tick)
 const latestPrices = new Map<string, number>();
@@ -15,52 +17,84 @@ export function getLatestPrice(symbol: string): number | undefined {
   return latestPrices.get(symbol);
 }
 
-// Check if a short order has sufficient margin (150% of position value)
-async function hasMargin(order: Order, fillPrice: number): Promise<boolean> {
-  if (order.side === 'BUY') return true; // longs are checked via cash
+type FillResult =
+  | { ok: true }
+  | { ok: false; reason: string };
 
-  const portfolio = await getPortfolio(order.user_id, order.competition_id);
-  if (!portfolio) return false;
-
-  const required = Number(order.qty) * fillPrice * 1.5;
-  return Number(portfolio.cash_balance) >= required;
+function money(value: number): string {
+  return `$${value.toFixed(2)}`;
 }
 
-async function executeFill(order: Order, fillPrice: number): Promise<boolean> {
-  const portfolio = await getPortfolio(order.user_id, order.competition_id);
-  if (!portfolio) return false;
+function getMarkedPrice(symbol: string, fillPrice: number, holding?: Holding): number {
+  return latestPrices.get(symbol) ?? Number(holding?.avg_cost ?? fillPrice);
+}
 
-  const cash = Number(portfolio.cash_balance);
-  const qty = Number(order.qty);
+async function getProjectedGrossExposure(
+  order: Order,
+  portfolioId: string,
+  fillPrice: number,
+): Promise<{ grossExposure: number; exposureLimit: number } | null> {
+  const competition = await getCompetition(order.competition_id);
+  if (!competition) return null;
 
-  // BUY: need enough cash
-  if (order.side === 'BUY') {
-    const cost = qty * fillPrice;
-    if (cash < cost) {
-      await rejectOrder(order.id);
-      return false;
-    }
+  const holdings = await getHoldings(portfolioId);
+  const nextQtyBySymbol = new Map<string, number>();
+  const holdingBySymbol = new Map<string, Holding>();
+
+  for (const holding of holdings) {
+    const qty = Number(holding.qty);
+    nextQtyBySymbol.set(holding.symbol, qty);
+    holdingBySymbol.set(holding.symbol, holding);
   }
 
-  // SELL (short): need 150% margin if going net short
-  if (order.side === 'SELL') {
-    const shortMarginOk = await hasMargin(order, fillPrice);
-    if (!shortMarginOk) {
-      await rejectOrder(order.id);
-      return false;
-    }
+  const qtyDelta = order.side === 'BUY' ? Number(order.qty) : -Number(order.qty);
+  nextQtyBySymbol.set(order.symbol, (nextQtyBySymbol.get(order.symbol) ?? 0) + qtyDelta);
+
+  let grossExposure = 0;
+  for (const [symbol, qty] of nextQtyBySymbol) {
+    if (Math.abs(qty) < 0.000001) continue;
+    const price = symbol === order.symbol
+      ? fillPrice
+      : getMarkedPrice(symbol, fillPrice, holdingBySymbol.get(symbol));
+    grossExposure += Math.abs(qty) * price;
+  }
+
+  return {
+    grossExposure,
+    exposureLimit: Number(competition.starting_balance),
+  };
+}
+
+async function reject(order: Order, reason: string): Promise<FillResult> {
+  await rejectOrder(order.id);
+  sendToUser(order.user_id, { type: 'order_rejected', orderId: order.id, reason });
+  return { ok: false, reason };
+}
+
+export async function executeFill(order: Order, fillPrice: number): Promise<FillResult> {
+  const portfolio = await getPortfolio(order.user_id, order.competition_id);
+  if (!portfolio) return reject(order, 'Portfolio not found');
+
+  const projected = await getProjectedGrossExposure(order, portfolio.id, fillPrice);
+  if (!projected) return reject(order, 'Competition not found');
+  if (projected.grossExposure > projected.exposureLimit + 0.01) {
+    return reject(
+      order,
+      `Gross exposure limit exceeded — projected ${money(projected.grossExposure)} vs limit ${money(projected.exposureLimit)}`,
+    );
   }
 
   const filled = await fillOrder(order.id, fillPrice);
-  if (!filled) return false;
+  if (!filled) return { ok: false, reason: 'Order no longer pending' };
 
   // qty sign convention: BUY → positive delta, SELL → negative delta
+  const qty = Number(order.qty);
   const qtyDelta = order.side === 'BUY' ? qty : -qty;
   await applyFill(portfolio.id, order.symbol, qtyDelta, fillPrice);
   await recordTrade(order.id, order.user_id, order.competition_id, order.symbol, order.side, qty, fillPrice);
   await publishOrderFilled(order, fillPrice);
 
-  return true;
+  return { ok: true };
 }
 
 export async function startFillSimulator(): Promise<void> {
@@ -91,23 +125,39 @@ export async function startFillSimulator(): Promise<void> {
   });
 }
 
-// Called on every tick to check if any pending LIMIT orders can be filled
-export async function checkLimitOrders(competitionIds: string[]): Promise<void> {
-  for (const competitionId of competitionIds) {
-    const pendingOrders = await getPendingLimitOrders(competitionId);
-    for (const order of pendingOrders) {
-      if (!order.limit_price) continue;
-      const price = latestPrices.get(order.symbol);
-      if (!price) continue;
+let lastCheck = 0;
 
-      const limitPrice = Number(order.limit_price);
-      const shouldFill =
-        (order.side === 'BUY' && price <= limitPrice) ||
-        (order.side === 'SELL' && price >= limitPrice);
+// Called on every tick but throttled to once per second to avoid pool exhaustion
+export async function checkLimitOrders(): Promise<void> {
+  const now = Date.now();
+  if (now - lastCheck < 900) return;
+  lastCheck = now;
+  const [limitOrders, marketOrders] = await Promise.all([
+    getAllPendingLimitOrders(),
+    getAllPendingMarketOrders(),
+  ]);
 
-      if (shouldFill) {
-        await executeFill(order, price);
-      }
+  for (const order of marketOrders) {
+    const price = latestPrices.get(order.symbol);
+    if (!price) {
+      await reject(order, `No price available for ${order.symbol}`);
+      continue;
+    }
+    await executeFill(order, price);
+  }
+
+  for (const order of limitOrders) {
+    if (!order.limit_price) continue;
+    const price = latestPrices.get(order.symbol);
+    if (!price) continue;
+
+    const limitPrice = Number(order.limit_price);
+    const shouldFill =
+      (order.side === 'BUY' && price <= limitPrice) ||
+      (order.side === 'SELL' && price >= limitPrice);
+
+    if (shouldFill) {
+      await executeFill(order, price);
     }
   }
 }

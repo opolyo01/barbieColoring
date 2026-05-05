@@ -58,6 +58,17 @@ npm run dev                # http://localhost:4000  |  ws://localhost:4001
 
 The server auto-applies the DB schema on first start.
 
+To run against live market data instead of the built-in simulator, set these in `server/.env`:
+
+```bash
+MARKET_DATA_PROVIDER=polygon
+POLYGON_API_KEY=your_key_here
+# or MASSIVE_API_KEY=your_key_here
+POLYGON_FEED=delayed   # or realtime if your plan supports it
+```
+
+If `MARKET_DATA_PROVIDER` is left as `simulated`, the existing `server/src/simulator/priceEngine.ts` stays in use.
+
 ### 3. Start the client
 
 ```bash
@@ -154,6 +165,12 @@ VITE_WS_URL    = wss://your-server.railway.app
 | `FACEBOOK_APP_ID` | Facebook app ID | — |
 | `FACEBOOK_APP_SECRET` | Facebook app secret | — |
 | `TICK_INTERVAL_MS` | Price tick frequency in ms | `1000` |
+| `MARKET_DATA_PROVIDER` | `simulated` or `polygon`/`massive` | `simulated` |
+| `MARKET_DATA_PUBLISH_MS` | Tick publish cadence into Kafka/UI | `1000` |
+| `POLYGON_API_KEY` | API key for Polygon/Massive live data | — |
+| `MASSIVE_API_KEY` | Alias for `POLYGON_API_KEY` | — |
+| `POLYGON_FEED` | `delayed` or `realtime` live feed | `delayed` |
+| `POLYGON_SNAPSHOT_REFRESH_MS` | Snapshot resync cadence for live mode | `60000` |
 
 ### Client (`client/.env`)
 
@@ -191,23 +208,18 @@ Browser (React)
 
 ---
 
-## Swapping the Price Simulator for Real Data
+## Market Data Modes
 
-The simulator lives entirely in `server/src/simulator/priceEngine.ts`. The rest of the app only depends on two functions:
+The simulator remains in `server/src/simulator/priceEngine.ts` for tests and deterministic local development.
 
-```typescript
-getLatestPrices(): Map<string, number>   // called by portfolio + leaderboard
-getSymbols(): string[]                   // called by order validation
-```
+Runtime market data now goes through `server/src/marketData/index.ts`, which can start either:
 
-And one Kafka call:
-```typescript
-publishTick(tick: PriceTick): Promise<void>  // imported from kafka/producer.ts
-```
+1. the simulator (`MARKET_DATA_PROVIDER=simulated`)
+2. a live Polygon/Massive-backed engine (`MARKET_DATA_PROVIDER=polygon`)
 
-To plug in a real feed (e.g. Alpaca, Polygon.io):
-1. Replace `startPriceEngine()` with a WebSocket connection to your data provider
-2. On each incoming price event, call `publishTick()` with the same `PriceTick` shape
-3. Keep `getLatestPrices()` and `getSymbols()` returning current state
+The live engine is implemented in `server/src/marketData/polygonEngine.ts` and:
 
-No other files need to change.
+- hydrates initial symbol state from Polygon/Massive stock snapshots
+- streams live trade data over WebSocket
+- synthesizes app-level `PriceTick` events and publishes them to Kafka
+- keeps the same downstream interfaces used by portfolio marks, leaderboard updates, and order fills

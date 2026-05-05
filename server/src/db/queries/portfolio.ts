@@ -1,6 +1,14 @@
 import pool from '../pool';
 import { Holding, Portfolio } from '../../types';
 
+export async function getPortfolio(userId: string, competitionId: string): Promise<Portfolio | null> {
+  const { rows } = await pool.query<Portfolio>(
+    'SELECT * FROM portfolios WHERE user_id = $1 AND competition_id = $2',
+    [userId, competitionId],
+  );
+  return rows[0] ?? null;
+}
+
 export async function getHoldings(portfolioId: string): Promise<Holding[]> {
   const { rows } = await pool.query<Holding>(
     'SELECT * FROM holdings WHERE portfolio_id = $1 AND qty != 0',

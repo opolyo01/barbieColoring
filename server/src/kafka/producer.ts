@@ -3,13 +3,20 @@ import kafka, { TOPICS } from './client';
 import { PriceTick, Order } from '../types';
 
 let producer: Producer | null = null;
+let connecting: Promise<Producer> | null = null;
 
 export async function getProducer(): Promise<Producer> {
-  if (!producer) {
-    producer = kafka.producer({ allowAutoTopicCreation: true });
-    await producer.connect();
+  if (producer) return producer;
+  if (!connecting) {
+    connecting = (async () => {
+      const p = kafka.producer({ allowAutoTopicCreation: true });
+      await p.connect();
+      producer = p;
+      connecting = null;
+      return p;
+    })();
   }
-  return producer;
+  return connecting;
 }
 
 export async function publishTick(tick: PriceTick): Promise<void> {
@@ -43,5 +50,6 @@ export async function disconnectProducer(): Promise<void> {
   if (producer) {
     await producer.disconnect();
     producer = null;
+    connecting = null;
   }
 }

@@ -38,6 +38,12 @@ export const api = {
       }),
     join: (id: string, token: string) =>
       request<{ ok: boolean }>(`/competitions/${id}/join`, { method: 'POST', token }),
+    admin: (id: string, token: string) =>
+      request<import('../types').CompetitionAdminSnapshot>(`/competitions/${id}/admin`, { token }),
+    unenroll: (competitionId: string, userId: string, token: string) =>
+      request<{ ok: boolean }>(`/competitions/${competitionId}/enrollments/${userId}`, { method: 'DELETE', token }),
+    delete: (id: string, token: string) =>
+      request<{ ok: boolean }>(`/competitions/${id}`, { method: 'DELETE', token }),
     leaderboard: (id: string, token: string) =>
       request<import('../types').LeaderboardEntry[]>(`/competitions/${id}/leaderboard`, { token }),
   },
@@ -57,6 +63,8 @@ export const api = {
       request<import('../types').Order>('/orders', { method: 'POST', token, body: JSON.stringify(body) }),
     history: (competitionId: string, token: string) =>
       request<import('../types').Order[]>(`/orders/history/${competitionId}`, { token }),
+    cancel: (orderId: string, token: string) =>
+      request<{ cancelled: boolean }>(`/orders/${orderId}`, { method: 'DELETE', token }),
   },
 
   portfolio: {

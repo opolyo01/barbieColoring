@@ -23,9 +23,71 @@ body {
   background: #0f1117;
 }
 ::-webkit-scrollbar-thumb {
-  background: #21262d;
+  background: #334155;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #30363d;
+  background: #475569;
+}
+
+/* AG-Grid internal scroll viewports */
+.ag-body-horizontal-scroll-viewport::-webkit-scrollbar,
+.ag-body-viewport::-webkit-scrollbar { width: 6px; height: 6px; }
+.ag-body-horizontal-scroll-viewport::-webkit-scrollbar-track,
+.ag-body-viewport::-webkit-scrollbar-track { background: #0f1117; }
+.ag-body-horizontal-scroll-viewport::-webkit-scrollbar-thumb,
+.ag-body-viewport::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+.ag-body-horizontal-scroll-viewport::-webkit-scrollbar-thumb:hover,
+.ag-body-viewport::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* Force AG Grid's fake horizontal scrollbar to remain visible on macOS overlay scrollbars. */
+.ag-body-horizontal-scroll.ag-scrollbar-invisible.ag-apple-scrollbar {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.ag-body-horizontal-scroll {
+  background: #0f1117;
+}
+
+.portfolio-grid .ag-body-horizontal-scroll {
+  height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  border: 0 !important;
+}
+
+.portfolio-grid .ag-body-horizontal-scroll-viewport,
+.portfolio-grid .ag-horizontal-left-spacer,
+.portfolio-grid .ag-horizontal-right-spacer {
+  scrollbar-width: none;
+}
+
+.portfolio-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar,
+.portfolio-grid .ag-horizontal-left-spacer::-webkit-scrollbar,
+.portfolio-grid .ag-horizontal-right-spacer::-webkit-scrollbar {
+  display: none;
+}
+
+.portfolio-grid-scrollbar {
+  height: 12px;
+  scrollbar-color: #475569 #0f1117;
+  scrollbar-width: thin;
+}
+
+.portfolio-grid-scrollbar::-webkit-scrollbar {
+  height: 12px;
+}
+
+.portfolio-grid-scrollbar::-webkit-scrollbar-track {
+  background: #0f1117;
+}
+
+.portfolio-grid-scrollbar::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 9999px;
+}
+
+.portfolio-grid-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }

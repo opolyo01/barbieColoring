@@ -64,6 +64,21 @@ export function getSymbols(): string[] {
   return Object.keys(SYMBOLS);
 }
 
+// Dynamically add a symbol if not already tracked; returns its current price
+export function ensureSymbol(symbol: string): number {
+  if (state[symbol]) return state[symbol].price;
+
+  const initialPrice = parseFloat((50 + Math.random() * 200).toFixed(2));
+  (SYMBOLS as Record<string, { price: number; volatility: number; drift: number }>)[symbol] = {
+    price: initialPrice,
+    volatility: 0.30,
+    drift: 0.05,
+  };
+  state[symbol] = { price: initialPrice, open: initialPrice, high: initialPrice, low: initialPrice };
+  console.log(`[priceEngine] Added dynamic symbol ${symbol} @ $${initialPrice}`);
+  return initialPrice;
+}
+
 // Reset OHLC candle every minute
 let lastCandleReset = Date.now();
 
@@ -92,10 +107,13 @@ export function startPriceEngine(tickIntervalMs: number): NodeJS.Timeout {
       if (newPrice < s.low) s.low = newPrice;
 
       const volume = Math.floor(Math.random() * 5000 + 500);
+      const halfSpread = Math.max(0.01, newPrice * (SYMBOLS as Record<string, { price: number; volatility: number; drift: number }>)[symbol].volatility * 0.001);
 
       const tick: PriceTick = {
         symbol,
         price: newPrice,
+        bid: parseFloat((newPrice - halfSpread).toFixed(2)),
+        ask: parseFloat((newPrice + halfSpread).toFixed(2)),
         open: s.open,
         high: s.high,
         low: s.low,

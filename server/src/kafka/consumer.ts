@@ -1,8 +1,8 @@
 import kafka, { TOPICS } from './client';
-import { PriceTick } from '../types';
+import { PriceTick, Order } from '../types';
 
 type TickHandler = (tick: PriceTick) => void;
-type FilledHandler = (orderId: string, fillPrice: number) => void;
+type FilledHandler = (order: Order) => void;
 
 export async function startConsumers(
   onTick: TickHandler,
@@ -31,8 +31,8 @@ export async function startConsumers(
     eachMessage: async ({ message }) => {
       if (!message.value) return;
       try {
-        const data = JSON.parse(message.value.toString());
-        onFilled(data.id, data.fill_price);
+        const order: Order = JSON.parse(message.value.toString());
+        onFilled(order);
       } catch {
         // malformed message — skip
       }

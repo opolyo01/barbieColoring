@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import OAuthCallback from './pages/OAuthCallback';
 import Competitions from './pages/Competitions';
 import TradingRoom from './pages/TradingRoom';
+import CompetitionAdmin from './pages/CompetitionAdmin';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
           <Route path="/auth/callback" element={<OAuthCallback />} />
           <Route path="/competitions" element={<ProtectedRoute><Competitions /></ProtectedRoute>} />
+          <Route path="/competition/:id/admin" element={<ProtectedRoute><CompetitionAdmin /></ProtectedRoute>} />
           <Route path="/competition/:id" element={<ProtectedRoute><TradingRoom /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/competitions" replace />} />
         </Routes>

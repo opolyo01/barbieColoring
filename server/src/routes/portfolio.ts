@@ -1,13 +1,13 @@
 import { Router, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
-import { AuthenticatedRequest } from '../types';
 import { getPortfolioWithHoldings } from '../db/queries/portfolio';
-import { getLatestPrices } from '../simulator/priceEngine';
+import { getLatestPrices } from '../marketData';
 
 const router = Router();
 
-router.get('/:competitionId', requireAuth as never, async (req: AuthenticatedRequest, res: Response) => {
-  const result = await getPortfolioWithHoldings(req.userId, req.params.competitionId);
+router.get('/:competitionId', requireAuth, async (req, res: Response) => {
+  const userId = req.userId!;
+  const result = await getPortfolioWithHoldings(userId, req.params.competitionId);
   if (!result) {
     res.status(404).json({ error: 'Portfolio not found — are you enrolled in this competition?' });
     return;

@@ -1,17 +1,15 @@
 import { Router, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
-import { AuthenticatedRequest, OrderSide, OrderType } from '../types';
-import { createOrder, getTradeHistory } from '../db/queries/orders';
+import { OrderSide, OrderType } from '../types';
+import { createOrder, getTradeHistory, cancelOrder } from '../db/queries/orders';
 import { getEnrollment } from '../db/queries/competitions';
-import { publishOrderSubmitted } from '../kafka/producer';
-import { getLatestPrice } from '../kafka/fillSimulator';
-import { getSymbols } from '../simulator/priceEngine';
+import { getLatestPrice, updatePrice, executeFill } from '../kafka/fillSimulator';
+import { ensureSymbol } from '../marketData';
 
 const router = Router();
 
-const ALLOWED_SYMBOLS = new Set(getSymbols());
-
-router.post('/', requireAuth as never, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', requireAuth, async (req, res: Response) => {
+  const userId = req.userId!;
   const { competitionId, symbol, side, qty, orderType, limitPrice } = req.body as {
     competitionId?: string;
     symbol?: string;
@@ -33,10 +31,6 @@ router.post('/', requireAuth as never, async (req: AuthenticatedRequest, res: Re
     res.status(400).json({ error: 'orderType must be MARKET or LIMIT' });
     return;
   }
-  if (!ALLOWED_SYMBOLS.has(symbol.toUpperCase())) {
-    res.status(400).json({ error: `Symbol ${symbol} is not supported` });
-    return;
-  }
   if (qty <= 0 || !Number.isFinite(qty)) {
     res.status(400).json({ error: 'qty must be a positive number' });
     return;
@@ -46,21 +40,22 @@ router.post('/', requireAuth as never, async (req: AuthenticatedRequest, res: Re
     return;
   }
 
-  const enrollment = await getEnrollment(req.userId, competitionId);
+  const enrollment = await getEnrollment(userId, competitionId);
   if (!enrollment) {
     res.status(403).json({ error: 'Not enrolled in this competition' });
     return;
   }
 
-  // Quick sanity check: is there any price for this symbol?
-  const currentPrice = getLatestPrice(symbol.toUpperCase());
+  // Ensure symbol is tracked by the price engine; seed fillSimulator cache if new
+  const sym = symbol.toUpperCase();
+  let currentPrice = getLatestPrice(sym);
   if (!currentPrice) {
-    res.status(503).json({ error: 'No price available for symbol — try again shortly' });
-    return;
+    currentPrice = await ensureSymbol(sym);
+    updatePrice(sym, currentPrice);
   }
 
   const order = await createOrder(
-    req.userId,
+    userId,
     competitionId,
     symbol.toUpperCase(),
     side as OrderSide,
@@ -69,14 +64,39 @@ router.post('/', requireAuth as never, async (req: AuthenticatedRequest, res: Re
     limitPrice ?? null,
   );
 
-  // Send to Kafka — fill simulator will process it
-  await publishOrderSubmitted(order);
+  // MARKET orders: fill synchronously right now so the caller gets an immediate
+  // accept/reject decision against the current risk rules.
+  // LIMIT orders: left as pending; checkLimitOrders() picks them up on each tick.
+  if (orderType === 'MARKET') {
+    try {
+      const result = await executeFill(order, currentPrice);
+      if (!result.ok) {
+        res.status(400).json({ error: result.reason });
+        return;
+      }
+    } catch (err) {
+      console.error('Inline fill error for order', order.id, err);
+      res.status(500).json({ error: 'Failed to execute market order' });
+      return;
+    }
+  }
 
   res.status(202).json(order);
 });
 
-router.get('/history/:competitionId', requireAuth as never, async (req: AuthenticatedRequest, res: Response) => {
-  const trades = await getTradeHistory(req.userId, req.params.competitionId);
+router.delete('/:orderId', requireAuth, async (req, res: Response) => {
+  const userId = req.userId!;
+  const cancelled = await cancelOrder(req.params.orderId, userId);
+  if (!cancelled) {
+    res.status(404).json({ error: 'Order not found or already terminal' });
+    return;
+  }
+  res.json({ cancelled: true });
+});
+
+router.get('/history/:competitionId', requireAuth, async (req, res: Response) => {
+  const userId = req.userId!;
+  const trades = await getTradeHistory(userId, req.params.competitionId);
   res.json(trades);
 });
 
