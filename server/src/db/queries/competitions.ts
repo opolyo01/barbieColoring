@@ -43,7 +43,7 @@ const STATUS_EXPR = `CASE WHEN NOW() < c.start_date THEN 'pending' WHEN NOW() > 
 
 export async function listCompetitions(userId: string): Promise<(Competition & { participant_count: number; enrolled: boolean })[]> {
   const { rows } = await pool.query(
-    `SELECT c.id, c.name, c.description, c.start_date, c.end_date, c.starting_balance, c.created_by, c.created_at,
+    `SELECT c.id, c.name, c.description, c.start_date, c.end_date, c.starting_balance, c.invite_code, c.created_by, c.created_at,
             ${STATUS_EXPR} AS status,
             COUNT(e.id)::int AS participant_count,
             EXISTS(
@@ -53,6 +53,12 @@ export async function listCompetitions(userId: string): Promise<(Competition & {
             ) AS enrolled
      FROM competitions c
      LEFT JOIN enrollments e ON e.competition_id = c.id
+     WHERE c.created_by = $1
+        OR EXISTS (
+          SELECT 1
+          FROM enrollments me
+          WHERE me.competition_id = c.id AND me.user_id = $1
+        )
      GROUP BY c.id
      ORDER BY c.created_at DESC`,
     [userId],
@@ -62,10 +68,21 @@ export async function listCompetitions(userId: string): Promise<(Competition & {
 
 export async function getCompetition(id: string): Promise<Competition | null> {
   const { rows } = await pool.query<Competition>(
-    `SELECT c.id, c.name, c.description, c.start_date, c.end_date, c.starting_balance, c.created_by, c.created_at,
+    `SELECT c.id, c.name, c.description, c.start_date, c.end_date, c.starting_balance, c.invite_code, c.created_by, c.created_at,
             ${STATUS_EXPR} AS status
      FROM competitions c WHERE c.id = $1`,
     [id],
+  );
+  return rows[0] ?? null;
+}
+
+export async function getCompetitionByInviteCode(inviteCode: string): Promise<Competition | null> {
+  const { rows } = await pool.query<Competition>(
+    `SELECT c.id, c.name, c.description, c.start_date, c.end_date, c.starting_balance, c.invite_code, c.created_by, c.created_at,
+            ${STATUS_EXPR} AS status
+     FROM competitions c
+     WHERE c.invite_code = $1`,
+    [inviteCode],
   );
   return rows[0] ?? null;
 }

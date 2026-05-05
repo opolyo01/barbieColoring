@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   email         TEXT NOT NULL,
   display_name  TEXT NOT NULL,
   password_hash TEXT,                         -- null for OAuth users
-  provider      TEXT,                         -- 'google' | 'facebook'
+  provider      TEXT,                         -- 'google'
   provider_id   TEXT,                         -- provider's user ID
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (email),
@@ -21,10 +21,18 @@ CREATE TABLE IF NOT EXISTS competitions (
   start_date       TIMESTAMPTZ NOT NULL,
   end_date         TIMESTAMPTZ NOT NULL,
   starting_balance NUMERIC(20, 2) NOT NULL DEFAULT 1000000,
+  invite_code      TEXT NOT NULL DEFAULT UPPER(ENCODE(gen_random_bytes(8), 'hex')),
   status           TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'closed')),
   created_by       UUID NOT NULL REFERENCES users(id),
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE competitions ADD COLUMN IF NOT EXISTS invite_code TEXT;
+ALTER TABLE competitions ALTER COLUMN invite_code SET DEFAULT UPPER(ENCODE(gen_random_bytes(8), 'hex'));
+UPDATE competitions
+SET invite_code = UPPER(ENCODE(gen_random_bytes(8), 'hex'))
+WHERE invite_code IS NULL;
+ALTER TABLE competitions ALTER COLUMN invite_code SET NOT NULL;
 
 CREATE TABLE IF NOT EXISTS enrollments (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -86,3 +94,4 @@ CREATE INDEX IF NOT EXISTS idx_holdings_portfolio ON holdings(portfolio_id);
 CREATE INDEX IF NOT EXISTS idx_orders_user_competition ON orders(user_id, competition_id);
 CREATE INDEX IF NOT EXISTS idx_orders_competition_pending ON orders(competition_id) WHERE status = 'pending';
 CREATE INDEX IF NOT EXISTS idx_trades_user_competition ON trades(user_id, competition_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_competitions_invite_code ON competitions(invite_code);

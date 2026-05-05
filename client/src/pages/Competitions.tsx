@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 import { Competition } from '../types';
@@ -16,10 +16,14 @@ function statusBadge(status: Competition['status']) {
 export default function Competitions() {
   const { token, user, logout } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [joining, setJoining] = useState<string | null>(null);
+  const [showJoin, setShowJoin] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [joinError, setJoinError] = useState('');
+  const [joiningInvite, setJoiningInvite] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   function handleLogout() {
@@ -43,6 +47,14 @@ export default function Competitions() {
     api.competitions.list(token).then(setCompetitions).finally(() => setLoading(false));
   }, [token]);
 
+  useEffect(() => {
+    const invite = searchParams.get('invite')?.trim().toUpperCase();
+    if (!invite) return;
+    setJoinCode(invite);
+    setJoinError('');
+    setShowJoin(true);
+  }, [searchParams]);
+
   async function handleDelete(id: string) {
     if (!token || !window.confirm('Delete this competition? This cannot be undone.')) return;
     setDeleting(id);
@@ -56,16 +68,37 @@ export default function Competitions() {
     }
   }
 
-  async function handleJoin(id: string) {
-    if (!token) return;
-    setJoining(id);
+  function buildInviteLink(inviteCode: string) {
+    return `${window.location.origin}/competitions?invite=${encodeURIComponent(inviteCode)}`;
+  }
+
+  async function copyInvite(text: string, label: string) {
     try {
-      await api.competitions.join(id, token);
-      navigate(`/competition/${id}`);
+      await navigator.clipboard.writeText(text);
+    } catch {
+      window.prompt(`Copy ${label}`, text);
+    }
+  }
+
+  async function handleJoinByInvite() {
+    if (!token) return;
+    const inviteCode = joinCode.trim().toUpperCase();
+    if (!inviteCode) {
+      setJoinError('Invite code is required');
+      return;
+    }
+    setJoiningInvite(true);
+    setJoinError('');
+    try {
+      const result = await api.competitions.joinByInvite(inviteCode, token);
+      setShowJoin(false);
+      setJoinCode('');
+      setSearchParams({});
+      navigate(`/competition/${result.competitionId}`);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to join');
+      setJoinError(err instanceof Error ? err.message : 'Failed to join');
     } finally {
-      setJoining(null);
+      setJoiningInvite(false);
     }
   }
 
@@ -100,6 +133,15 @@ export default function Competitions() {
         </div>
         <div className="flex items-center gap-3">
           <button
+            onClick={() => {
+              setJoinError('');
+              setShowJoin(true);
+            }}
+            className="border border-border hover:border-gray-500 text-gray-300 hover:text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            Join with Invite
+          </button>
+          <button
             onClick={() => setShowCreate(true)}
             className="bg-accent hover:bg-blue-400 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
           >
@@ -130,7 +172,7 @@ export default function Competitions() {
         ) : competitions.length === 0 ? (
           <div className="text-center py-16 text-gray-500">
             <p className="text-4xl mb-3">🏆</p>
-            <p>No competitions yet. Create the first one!</p>
+            <p>No competitions yet. Create one or join with an invite code.</p>
           </div>
         ) : (
           <div className="grid gap-4">
@@ -150,6 +192,24 @@ export default function Competitions() {
                     <span>Book: {fmt(c.starting_balance)}</span>
                     <span>{c.participant_count ?? 0} players</span>
                   </div>
+                  {c.created_by === user?.id && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-mono text-gray-500">
+                      <span className="text-gray-600">Invite</span>
+                      <span className="px-2 py-1 rounded border border-border text-gray-300">{c.invite_code}</span>
+                      <button
+                        onClick={() => copyInvite(c.invite_code, 'invite code')}
+                        className="px-2 py-1 rounded border border-border hover:border-gray-500 text-gray-400 hover:text-white transition-colors"
+                      >
+                        Copy Code
+                      </button>
+                      <button
+                        onClick={() => copyInvite(buildInviteLink(c.invite_code), 'invite link')}
+                        className="px-2 py-1 rounded border border-border hover:border-gray-500 text-gray-400 hover:text-white transition-colors"
+                      >
+                        Copy Link
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2 ml-4 shrink-0">
                   {c.created_by === user?.id && (
@@ -160,22 +220,12 @@ export default function Competitions() {
                       Admin
                     </button>
                   )}
-                  {c.enrolled ? (
-                    <button
-                      onClick={() => navigate(`/competition/${c.id}`)}
-                      className="bg-green-900 hover:bg-green-800 text-green-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-                    >
-                      Open
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleJoin(c.id)}
-                      disabled={joining === c.id || c.status === 'closed'}
-                      className="bg-accent hover:bg-blue-400 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-                    >
-                      {joining === c.id ? 'Joining...' : 'Join'}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => navigate(`/competition/${c.id}`)}
+                    className="bg-green-900 hover:bg-green-800 text-green-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Open
+                  </button>
                   {c.created_by === user?.id && (
                     <button
                       onClick={() => handleDelete(c.id)}
@@ -192,6 +242,56 @@ export default function Competitions() {
           </div>
         )}
       </div>
+
+      {/* Join Invite Modal */}
+      {showJoin && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+          <div className="bg-panel border border-border rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-lg font-bold text-white mb-4">Join by Invite</h2>
+
+            {joinError && (
+              <div className="bg-red-900/30 border border-red-500/30 text-red-400 text-sm rounded-lg px-3 py-2 mb-4">
+                {joinError}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Invite Code</label>
+                <input
+                  autoFocus
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                  className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-white text-sm font-mono tracking-wide focus:outline-none focus:border-accent"
+                  placeholder="AB12CD34EF56"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowJoin(false);
+                    setJoinError('');
+                    setSearchParams({});
+                  }}
+                  className="flex-1 border border-border text-gray-300 hover:text-white text-sm font-medium py-2 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleJoinByInvite}
+                  disabled={joiningInvite}
+                  className="flex-1 bg-accent hover:bg-blue-400 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg transition-colors"
+                >
+                  {joiningInvite ? 'Joining...' : 'Join'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Competition Modal */}
       {showCreate && (

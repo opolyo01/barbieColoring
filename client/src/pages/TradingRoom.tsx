@@ -77,6 +77,15 @@ export default function TradingRoom() {
     setMainTab('oe');
   }, []);
 
+  const resolveSymbolPrice = useCallback(async (symbol: string) => {
+    if (!token) return;
+    const normalized = symbol.toUpperCase().trim();
+    if (!normalized || prices.get(normalized) != null) return;
+
+    const info = await api.symbols.get(normalized, token);
+    setPrices((prev) => new Map(prev).set(info.symbol, info.price ?? 0));
+  }, [prices, token]);
+
   const handleClosePosition = useCallback(async (holding: { symbol: string; side: 'LONG' | 'SHORT'; qty: number | null }) => {
     if (!token || !competitionId || !holding.qty || holding.qty <= 0) return;
 
@@ -339,6 +348,7 @@ export default function TradingRoom() {
                 semvLeft={semvLeft}
                 competitionId={competitionId ?? ''}
                 token={token ?? ''}
+                onResolveSymbolPrice={resolveSymbolPrice}
                 prefill={oePrefill}
                 onPrefillApplied={() => setOePrefill(null)}
                 onOrdersPlaced={() => {

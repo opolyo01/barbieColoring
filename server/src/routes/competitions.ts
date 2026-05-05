@@ -4,6 +4,7 @@ import {
   createCompetition,
   listCompetitions,
   getCompetition,
+  getCompetitionByInviteCode,
   enrollUser,
   getEnrollment,
   getCompetitionAdminParticipants,
@@ -15,6 +16,10 @@ import { getCompetitionTradeAudit } from '../db/queries/orders';
 import { getLatestPrices } from '../marketData';
 
 const router = Router();
+
+function normalizeInviteCode(value: string | undefined): string {
+  return value?.trim().toUpperCase() ?? '';
+}
 
 router.get('/', requireAuth, async (req, res: Response) => {
   const userId = req.userId!;
@@ -67,6 +72,10 @@ router.get('/:id', requireAuth, async (req, res: Response) => {
   if (!competition) { res.status(404).json({ error: 'Not found' }); return; }
 
   const enrolled = !!(await getEnrollment(userId, req.params.id));
+  if (!enrolled && competition.created_by !== userId) {
+    res.status(403).json({ error: 'This competition is invite-only' });
+    return;
+  }
   res.json({ ...competition, enrolled });
 });
 
@@ -124,12 +133,36 @@ router.get('/:id/admin', requireAuth, async (req, res: Response) => {
   });
 });
 
+router.post('/join-by-invite', requireAuth, async (req, res: Response) => {
+  const userId = req.userId!;
+  const inviteCode = normalizeInviteCode((req.body as { inviteCode?: string }).inviteCode);
+  if (!inviteCode) {
+    res.status(400).json({ error: 'inviteCode is required' });
+    return;
+  }
+
+  const competition = await getCompetitionByInviteCode(inviteCode);
+  if (!competition) { res.status(404).json({ error: 'Invalid invite code' }); return; }
+  if (competition.status === 'closed') {
+    res.status(400).json({ error: 'Competition is closed' });
+    return;
+  }
+
+  await enrollUser(userId, competition.id);
+  res.json({ ok: true, competitionId: competition.id });
+});
+
 router.post('/:id/join', requireAuth, async (req, res: Response) => {
   const userId = req.userId!;
   const competition = await getCompetition(req.params.id);
   if (!competition) { res.status(404).json({ error: 'Not found' }); return; }
   if (competition.status === 'closed') {
     res.status(400).json({ error: 'Competition is closed' });
+    return;
+  }
+  const inviteCode = normalizeInviteCode((req.body as { inviteCode?: string }).inviteCode);
+  if (!inviteCode || inviteCode !== competition.invite_code) {
+    res.status(403).json({ error: 'A valid invite code is required to join this competition' });
     return;
   }
 
@@ -167,8 +200,14 @@ router.delete('/:id', requireAuth, async (req, res: Response) => {
 });
 
 router.get('/:id/leaderboard', requireAuth, async (req, res: Response) => {
+  const userId = req.userId!;
   const competition = await getCompetition(req.params.id);
   if (!competition) { res.status(404).json({ error: 'Not found' }); return; }
+  const enrolled = !!(await getEnrollment(userId, req.params.id));
+  if (!enrolled && competition.created_by !== userId) {
+    res.status(403).json({ error: 'This competition is invite-only' });
+    return;
+  }
 
   const users = await getLeaderboardData(req.params.id);
   const rankings = computeLeaderboard(users, getLatestPrices());

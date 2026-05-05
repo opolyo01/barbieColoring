@@ -70,6 +70,7 @@ export class AlpacaEngine {
   private readonly apiSecret: string;
   private readonly publishIntervalMs: number;
   private readonly snapshotRefreshMs: number;
+  private readonly includeQuotes = false;
   private readonly trackedSymbols = new Set<string>();
   private readonly states = new Map<string, SymbolState>();
 
@@ -222,7 +223,7 @@ export class AlpacaEngine {
         if (msg === 'authenticated') {
           this.authenticated = true;
           this.subscribeSymbols();
-          console.log('[alpaca] Authenticated — subscribed to', this.trackedSymbols.size, 'symbols');
+          console.log('[alpaca] Authenticated — subscribed to', this.trackedSymbols.size, 'symbols (trades only)');
         }
         continue;
       }
@@ -246,7 +247,11 @@ export class AlpacaEngine {
 
   private subscribeSymbols(symbols: string[] = Array.from(this.trackedSymbols)): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN || symbols.length === 0) return;
-    this.ws.send(JSON.stringify({ action: 'subscribe', trades: symbols, quotes: symbols }));
+    this.ws.send(JSON.stringify({
+      action: 'subscribe',
+      trades: symbols,
+      ...(this.includeQuotes ? { quotes: symbols } : {}),
+    }));
   }
 
   private applyTrade(event: AlpacaTradeEvent): void {
@@ -261,7 +266,7 @@ export class AlpacaEngine {
     state.volume += size;
     state.ts = new Date(event.t).getTime();
 
-    if (state.bid <= 0 || state.ask <= 0) {
+    if (!this.includeQuotes || state.bid <= 0 || state.ask <= 0) {
       const half = Math.max(0.01, event.p * 0.0005);
       state.bid = Number((event.p - half).toFixed(2));
       state.ask = Number((event.p + half).toFixed(2));

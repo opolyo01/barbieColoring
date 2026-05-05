@@ -36,8 +36,18 @@ export const api = {
         token,
         body: JSON.stringify(body),
       }),
-    join: (id: string, token: string) =>
-      request<{ ok: boolean }>(`/competitions/${id}/join`, { method: 'POST', token }),
+    join: (id: string, inviteCode: string, token: string) =>
+      request<{ ok: boolean }>(`/competitions/${id}/join`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ inviteCode }),
+      }),
+    joinByInvite: (inviteCode: string, token: string) =>
+      request<{ ok: boolean; competitionId: string }>('/competitions/join-by-invite', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ inviteCode }),
+      }),
     admin: (id: string, token: string) =>
       request<import('../types').CompetitionAdminSnapshot>(`/competitions/${id}/admin`, { token }),
     unenroll: (competitionId: string, userId: string, token: string) =>
@@ -79,5 +89,7 @@ export const api = {
   symbols: {
     list: (token: string) =>
       request<import('../types').SymbolInfo[]>('/symbols', { token }),
+    get: (symbol: string, token: string) =>
+      request<import('../types').SymbolInfo>(`/symbols/${encodeURIComponent(symbol)}`, { token }),
   },
 };

@@ -8,7 +8,7 @@ Compete against others using a virtual trading book. Each user gets a configurab
 
 ## OAuth Setup (required before first run)
 
-Authentication uses Google and Facebook OAuth — no username/password.
+Authentication uses Google OAuth — no username/password.
 
 ### Google
 1. Go to [console.cloud.google.com](https://console.cloud.google.com)
@@ -18,16 +18,6 @@ Authentication uses Google and Facebook OAuth — no username/password.
    - Local: `http://localhost:4000/api/auth/google/callback`
    - Production: `https://your-server.railway.app/api/auth/google/callback`
 5. Copy **Client ID** and **Client Secret** → set in `server/.env`
-
-### Facebook
-1. Go to [developers.facebook.com](https://developers.facebook.com) → **Create App** → **Consumer**
-2. Add **Facebook Login** product → **Settings**
-3. Add Valid OAuth Redirect URI:
-   - Local: `http://localhost:4000/api/auth/facebook/callback`
-   - Production: `https://your-server.railway.app/api/auth/facebook/callback`
-4. Copy **App ID** and **App Secret** from **App Settings → Basic** → set in `server/.env`
-
-> For local dev Facebook requires HTTPS by default. Use [ngrok](https://ngrok.com) to tunnel `localhost:4000` and use the ngrok URL as `SERVER_URL`.
 
 ---
 
@@ -51,7 +41,7 @@ This starts:
 
 ```bash
 cd server
-cp .env.example .env       # fill in GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, FACEBOOK_APP_ID, FACEBOOK_APP_SECRET
+cp .env.example .env       # fill in GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET
 npm install
 npm run dev                # http://localhost:4000  |  ws://localhost:4001
 ```
@@ -89,7 +79,7 @@ npm install
 npm run dev                # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000), sign in with Google or Facebook, create a competition, and start trading.
+Open [http://localhost:3000](http://localhost:3000), sign in with Google, create a competition, and start trading.
 
 ### Stopping
 
@@ -127,8 +117,6 @@ SERVER_URL          = https://your-server.railway.app
 CLIENT_ORIGIN       = https://your-app.vercel.app
 GOOGLE_CLIENT_ID    = <from Google Console>
 GOOGLE_CLIENT_SECRET= <from Google Console>
-FACEBOOK_APP_ID     = <from Facebook Developer>
-FACEBOOK_APP_SECRET = <from Facebook Developer>
 PORT                = 4000
 WS_PORT             = 4000
 TICK_INTERVAL_MS    = 1000
@@ -173,8 +161,6 @@ VITE_WS_URL    = wss://your-server.railway.app
 | `KAFKA_PASSWORD` | Kafka SASL password (Upstash) | — |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID | — |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | — |
-| `FACEBOOK_APP_ID` | Facebook app ID | — |
-| `FACEBOOK_APP_SECRET` | Facebook app secret | — |
 | `TICK_INTERVAL_MS` | Price tick frequency in ms | `1000` |
 | `MARKET_DATA_PROVIDER` | `simulated`, `alpaca`, `polygon`, or `massive` | `simulated` |
 | `MARKET_DATA_PUBLISH_MS` | Tick publish cadence into Kafka/UI | `1000` |

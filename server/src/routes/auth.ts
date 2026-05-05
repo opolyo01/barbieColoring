@@ -104,52 +104,6 @@ router.get('/google/callback', async (req: Request, res: Response) => {
   }
 });
 
-// ─── Facebook ────────────────────────────────────────────────────────────────
-
-router.get('/facebook', (_req: Request, res: Response) => {
-  const params = new URLSearchParams({
-    client_id:    process.env.FACEBOOK_APP_ID ?? '',
-    redirect_uri: `${SERVER_URL()}/api/auth/facebook/callback`,
-    scope:        'email,public_profile',
-    state:        generateState(),
-  });
-  res.redirect(`https://www.facebook.com/v19.0/dialog/oauth?${params}`);
-});
-
-router.get('/facebook/callback', async (req: Request, res: Response) => {
-  const { code, state, error } = req.query as Record<string, string>;
-
-  if (error) { redirectError(res, 'Facebook sign-in was cancelled'); return; }
-  if (!verifyState(state ?? '')) { redirectError(res, 'Invalid OAuth state'); return; }
-  if (!code) { redirectError(res, 'No auth code received'); return; }
-
-  try {
-    const tokenUrl = new URL('https://graph.facebook.com/v19.0/oauth/access_token');
-    tokenUrl.searchParams.set('client_id',     process.env.FACEBOOK_APP_ID ?? '');
-    tokenUrl.searchParams.set('redirect_uri',  `${SERVER_URL()}/api/auth/facebook/callback`);
-    tokenUrl.searchParams.set('client_secret', process.env.FACEBOOK_APP_SECRET ?? '');
-    tokenUrl.searchParams.set('code',          code);
-
-    const tokenRes = await fetch(tokenUrl.toString());
-    const tokenData = await tokenRes.json() as { access_token?: string; error?: { message: string } };
-    if (!tokenData.access_token) { redirectError(res, 'Failed to get Facebook token'); return; }
-
-    const profileRes = await fetch(
-      `https://graph.facebook.com/v19.0/me?fields=id,name,email&access_token=${tokenData.access_token}`,
-    );
-    const profile = await profileRes.json() as { id?: string; name?: string; email?: string };
-    if (!profile.id) { redirectError(res, 'Could not read Facebook profile'); return; }
-
-    const email = profile.email ?? `fb_${profile.id}@tradebattle.app`;
-    const user = await upsertOAuthUser('facebook', profile.id, profile.name ?? email, email);
-    const token = issueAppToken(user.id);
-    res.redirect(`${CLIENT_ORIGIN()}/auth/callback?token=${token}`);
-  } catch (err) {
-    console.error('Facebook OAuth error:', err);
-    redirectError(res, 'Facebook sign-in failed');
-  }
-});
-
 // ─── /me — resolve JWT → user profile ───────────────────────────────────────
 
 router.get('/me', async (req: Request, res: Response) => {

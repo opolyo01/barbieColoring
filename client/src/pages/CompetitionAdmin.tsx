@@ -81,6 +81,18 @@ export default function CompetitionAdmin() {
     }
   }
 
+  function buildInviteLink(inviteCode: string) {
+    return `${window.location.origin}/competitions?invite=${encodeURIComponent(inviteCode)}`;
+  }
+
+  async function copyInvite(text: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      window.prompt(`Copy ${label}`, text);
+    }
+  }
+
   const competition = snapshot?.competition;
 
   return (
@@ -142,6 +154,26 @@ export default function CompetitionAdmin() {
               <MetricCard label="Participants" value={String(snapshot.participants.length)} />
               <MetricCard label="Trades" value={String(snapshot.trades.length)} />
               <MetricCard label="Starting Balance" value={fmtMoney(Number(snapshot.competition.starting_balance))} />
+            </div>
+
+            <div className="bg-panel border border-border rounded-xl px-5 py-4">
+              <div className="text-white font-semibold">Invite Access</div>
+              <div className="text-xs text-gray-500 mt-1">This competition is invite-only. Share the code or link below.</div>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm font-mono">
+                <span className="px-3 py-2 rounded border border-border text-gray-100">{snapshot.competition.invite_code}</span>
+                <button
+                  onClick={() => copyInvite(snapshot.competition.invite_code, 'invite code')}
+                  className="px-3 py-2 text-xs border border-border text-gray-400 hover:text-white hover:border-gray-500 rounded transition-colors"
+                >
+                  Copy Code
+                </button>
+                <button
+                  onClick={() => copyInvite(buildInviteLink(snapshot.competition.invite_code), 'invite link')}
+                  className="px-3 py-2 text-xs border border-border text-gray-400 hover:text-white hover:border-gray-500 rounded transition-colors"
+                >
+                  Copy Link
+                </button>
+              </div>
             </div>
 
             <div className="bg-panel border border-border rounded-xl overflow-hidden">

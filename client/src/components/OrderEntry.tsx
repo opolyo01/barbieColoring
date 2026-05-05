@@ -6,6 +6,8 @@ import {
   ColDef,
   CellStyle,
   CellValueChangedEvent,
+  GridApi,
+  GridReadyEvent,
   ICellRendererParams,
 } from 'ag-grid-community';
 import { api } from '../api';
@@ -41,6 +43,7 @@ interface Props {
   competitionId: string;
   token: string;
   onOrdersPlaced: () => void;
+  onResolveSymbolPrice?: (symbol: string) => Promise<void> | void;
   prefill?: OrderEntryPrefill | null;
   onPrefillApplied?: () => void;
 }
@@ -139,6 +142,7 @@ export default function OrderEntry({
   competitionId,
   token,
   onOrdersPlaced,
+  onResolveSymbolPrice,
   prefill,
   onPrefillApplied,
 }: Props) {
@@ -146,6 +150,10 @@ export default function OrderEntry({
   const [submitting, setSubmitting] = useState(false);
   const [showPaste, setShowPaste] = useState(false);
   const [pasteText, setPasteText] = useState('');
+  const gridApiRef = useRef<GridApi<OrderRow> | null>(null);
+  const pendingFocusRowIndexRef = useRef<number | null>(null);
+  const symbolLookupInFlightRef = useRef<Set<string>>(new Set());
+  const symbolLookupAttemptRef = useRef<Map<string, number>>(new Map());
   const pricesRef = useRef(prices);
   pricesRef.current = prices;
 
@@ -178,6 +186,44 @@ export default function OrderEntry({
     onPrefillApplied?.();
   }, [onPrefillApplied, prefill]);
 
+  useEffect(() => {
+    const rowIndex = pendingFocusRowIndexRef.current;
+    if (rowIndex == null || rowIndex >= rows.length) return;
+
+    pendingFocusRowIndexRef.current = null;
+    const api = gridApiRef.current;
+    if (!api) return;
+
+    requestAnimationFrame(() => {
+      api.ensureIndexVisible(rowIndex);
+      api.setFocusedCell(rowIndex, 'symbol');
+      api.startEditingCell({ rowIndex, colKey: 'symbol' });
+    });
+  }, [rows]);
+
+  useEffect(() => {
+    if (!onResolveSymbolPrice) return;
+
+    for (const row of rows) {
+      const symbol = row.symbol.trim().toUpperCase();
+      const hasPrice = prices.get(symbol) != null;
+      const lastAttempt = symbolLookupAttemptRef.current.get(symbol) ?? 0;
+      const attemptTooRecent = Date.now() - lastAttempt < 5000;
+
+      if (!symbol || hasPrice || symbolLookupInFlightRef.current.has(symbol) || attemptTooRecent) continue;
+
+      symbolLookupInFlightRef.current.add(symbol);
+      symbolLookupAttemptRef.current.set(symbol, Date.now());
+      Promise.resolve(onResolveSymbolPrice(symbol))
+        .catch(() => {
+          // Leave the timestamp so failures back off instead of spamming requests.
+        })
+        .finally(() => {
+          symbolLookupInFlightRef.current.delete(symbol);
+        });
+    }
+  }, [onResolveSymbolPrice, prices, rows]);
+
   const onCellValueChanged = useCallback((e: CellValueChangedEvent<OrderRow>) => {
     const row: OrderRow = { ...e.data };
     if (e.colDef.field === 'orderType' && row.orderType === 'MARKET') row.limitPrice = null;
@@ -190,6 +236,9 @@ export default function OrderEntry({
         row.qty = Math.abs(row.qty);
       }
     }
+    if (e.colDef.field === 'symbol') {
+      row.symbol = row.symbol.toUpperCase().trim();
+    }
     if (row.status !== 'draft') row.status = 'draft';
     setRows(prev => {
       const next = prev.map(r => r._id === row._id ? row : r);
@@ -197,6 +246,7 @@ export default function OrderEntry({
       const isLastRow = rowIndex === next.length - 1;
 
       if (isLastRow && isRowValid(row)) {
+        pendingFocusRowIndexRef.current = next.length;
         next.push(newRow());
       }
 
@@ -381,6 +431,9 @@ export default function OrderEntry({
           columnDefs={colDefs}
           rowData={rows}
           getRowId={p => (p.data as OrderRow)._id}
+          onGridReady={(event: GridReadyEvent<OrderRow>) => {
+            gridApiRef.current = event.api;
+          }}
           onCellValueChanged={onCellValueChanged}
           defaultColDef={{ sortable: true, resizable: true, suppressHeaderMenuButton: true, enableCellChangeFlash: false }}
           singleClickEdit

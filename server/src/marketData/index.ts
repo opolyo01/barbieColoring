@@ -76,7 +76,7 @@ export async function startMarketDataEngine(tickIntervalMs: number): Promise<Mar
     });
     await alpacaEngine.start();
 
-    console.log(`[marketData] Provider=alpaca feed=iex symbols=${alpacaEngine.getSymbols().length}`);
+    console.log(`[marketData] Provider=alpaca feed=iex trades-only symbols=${alpacaEngine.getSymbols().length}`);
 
     return {
       stop: async () => {

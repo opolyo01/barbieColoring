@@ -14,6 +14,7 @@ export interface Competition {
   start_date: Date;
   end_date: Date;
   starting_balance: number;
+  invite_code: string;
   status: CompetitionStatus;
   created_by: string;
   created_at: Date;
