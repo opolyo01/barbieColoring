@@ -58,13 +58,24 @@ npm run dev                # http://localhost:4000  |  ws://localhost:4001
 
 The server auto-applies the DB schema on first start.
 
-To run against live market data instead of the built-in simulator, set these in `server/.env`:
+For market data, you have three runtime modes in `server/.env`:
+
+Alpaca IEX (recommended if you want a live provider without a paid market-data plan):
 
 ```bash
-MARKET_DATA_PROVIDER=polygon
-POLYGON_API_KEY=your_key_here
-# or MASSIVE_API_KEY=your_key_here
-POLYGON_FEED=delayed   # or realtime if your plan supports it
+MARKET_DATA_PROVIDER=alpaca
+ALPACA_API_KEY=your_key_here
+ALPACA_API_SECRET=your_secret_here
+ALPACA_SNAPSHOT_REFRESH_MS=60000
+```
+
+Polygon / Massive:
+
+```bash
+MARKET_DATA_PROVIDER=massive   # or polygon
+MASSIVE_API_KEY=your_key_here  # or POLYGON_API_KEY=your_key_here
+POLYGON_FEED=delayed           # or realtime if your plan supports it
+POLYGON_SNAPSHOT_REFRESH_MS=60000
 ```
 
 If `MARKET_DATA_PROVIDER` is left as `simulated`, the existing `server/src/simulator/priceEngine.ts` stays in use.
@@ -165,8 +176,11 @@ VITE_WS_URL    = wss://your-server.railway.app
 | `FACEBOOK_APP_ID` | Facebook app ID | — |
 | `FACEBOOK_APP_SECRET` | Facebook app secret | — |
 | `TICK_INTERVAL_MS` | Price tick frequency in ms | `1000` |
-| `MARKET_DATA_PROVIDER` | `simulated` or `polygon`/`massive` | `simulated` |
+| `MARKET_DATA_PROVIDER` | `simulated`, `alpaca`, `polygon`, or `massive` | `simulated` |
 | `MARKET_DATA_PUBLISH_MS` | Tick publish cadence into Kafka/UI | `1000` |
+| `ALPACA_API_KEY` | Alpaca market-data API key | — |
+| `ALPACA_API_SECRET` | Alpaca market-data API secret | — |
+| `ALPACA_SNAPSHOT_REFRESH_MS` | Snapshot resync cadence for Alpaca mode | `60000` |
 | `POLYGON_API_KEY` | API key for Polygon/Massive live data | — |
 | `MASSIVE_API_KEY` | Alias for `POLYGON_API_KEY` | — |
 | `POLYGON_FEED` | `delayed` or `realtime` live feed | `delayed` |
@@ -212,14 +226,20 @@ Browser (React)
 
 The simulator remains in `server/src/simulator/priceEngine.ts` for tests and deterministic local development.
 
-Runtime market data now goes through `server/src/marketData/index.ts`, which can start either:
+Runtime market data now goes through `server/src/marketData/index.ts`, which can start:
 
 1. the simulator (`MARKET_DATA_PROVIDER=simulated`)
-2. a live Polygon/Massive-backed engine (`MARKET_DATA_PROVIDER=polygon`)
+2. an Alpaca IEX-backed engine (`MARKET_DATA_PROVIDER=alpaca`)
+3. a Polygon/Massive-backed engine (`MARKET_DATA_PROVIDER=polygon` or `massive`)
 
-The live engine is implemented in `server/src/marketData/polygonEngine.ts` and:
+The provider adapters are:
 
-- hydrates initial symbol state from Polygon/Massive stock snapshots
-- streams live trade data over WebSocket
+- `server/src/marketData/alpacaEngine.ts`
+- `server/src/marketData/polygonEngine.ts`
+
+Each live adapter:
+
+- hydrates initial symbol state from provider snapshots
+- streams trade and quote updates over WebSocket
 - synthesizes app-level `PriceTick` events and publishes them to Kafka
 - keeps the same downstream interfaces used by portfolio marks, leaderboard updates, and order fills

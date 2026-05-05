@@ -5,8 +5,9 @@ import {
   ensureSymbol as ensureSimulatedSymbol,
 } from '../simulator/priceEngine';
 import { PolygonEngine } from './polygonEngine';
+import { AlpacaEngine } from './alpacaEngine';
 
-export type MarketDataProvider = 'simulated' | 'polygon';
+export type MarketDataProvider = 'simulated' | 'polygon' | 'alpaca';
 type LiveMarketDataVendor = 'polygon' | 'massive';
 
 export interface MarketDataController {
@@ -16,6 +17,7 @@ export interface MarketDataController {
 let activeProvider: MarketDataProvider = resolveMarketDataProvider();
 let simulatedTimer: ReturnType<typeof setInterval> | null = null;
 let polygonEngine: PolygonEngine | null = null;
+let alpacaEngine: AlpacaEngine | null = null;
 
 function getConfiguredValue(...keys: string[]): string | null {
   for (const key of keys) {
@@ -28,10 +30,13 @@ function getConfiguredValue(...keys: string[]): string | null {
 function resolveMarketDataProvider(): MarketDataProvider {
   const configured = process.env.MARKET_DATA_PROVIDER;
   if (!configured) {
-    return getConfiguredValue('POLYGON_API_KEY', 'MASSIVE_API_KEY') ? 'polygon' : 'simulated';
+    if (getConfiguredValue('ALPACA_API_KEY')) return 'alpaca';
+    if (getConfiguredValue('POLYGON_API_KEY', 'MASSIVE_API_KEY')) return 'polygon';
+    return 'simulated';
   }
 
   const raw = configured.toLowerCase();
+  if (raw === 'alpaca') return 'alpaca';
   if (raw === 'polygon' || raw === 'massive' || raw === 'real') return 'polygon';
   return 'simulated';
 }
@@ -54,6 +59,33 @@ export function getMarketDataProvider(): MarketDataProvider {
 
 export async function startMarketDataEngine(tickIntervalMs: number): Promise<MarketDataController> {
   activeProvider = resolveMarketDataProvider();
+
+  if (activeProvider === 'alpaca') {
+    const apiKey = getConfiguredValue('ALPACA_API_KEY');
+    const apiSecret = getConfiguredValue('ALPACA_API_SECRET');
+    if (!apiKey || !apiSecret) {
+      throw new Error('MARKET_DATA_PROVIDER=alpaca requires ALPACA_API_KEY and ALPACA_API_SECRET');
+    }
+
+    alpacaEngine = new AlpacaEngine({
+      apiKey,
+      apiSecret,
+      symbols: getSimulatedSymbols(),
+      publishIntervalMs: Number(process.env.MARKET_DATA_PUBLISH_MS ?? tickIntervalMs),
+      snapshotRefreshMs: Number(process.env.ALPACA_SNAPSHOT_REFRESH_MS ?? 60_000),
+    });
+    await alpacaEngine.start();
+
+    console.log(`[marketData] Provider=alpaca feed=iex symbols=${alpacaEngine.getSymbols().length}`);
+
+    return {
+      stop: async () => {
+        const engine = alpacaEngine;
+        alpacaEngine = null;
+        await engine?.stop();
+      },
+    };
+  }
 
   if (activeProvider === 'polygon') {
     const apiKey = getConfiguredValue('POLYGON_API_KEY', 'MASSIVE_API_KEY');
@@ -99,20 +131,22 @@ export async function startMarketDataEngine(tickIntervalMs: number): Promise<Mar
 }
 
 export function getLatestPrices(): Map<string, number> {
-  if (activeProvider === 'polygon' && polygonEngine) {
-    return polygonEngine.getLatestPrices();
-  }
+  if (activeProvider === 'alpaca' && alpacaEngine) return alpacaEngine.getLatestPrices();
+  if (activeProvider === 'polygon' && polygonEngine) return polygonEngine.getLatestPrices();
   return getSimulatedLatestPrices();
 }
 
 export function getSymbols(): string[] {
-  if (activeProvider === 'polygon' && polygonEngine) {
-    return polygonEngine.getSymbols();
-  }
+  if (activeProvider === 'alpaca' && alpacaEngine) return alpacaEngine.getSymbols();
+  if (activeProvider === 'polygon' && polygonEngine) return polygonEngine.getSymbols();
   return getSimulatedSymbols();
 }
 
 export async function ensureSymbol(symbol: string): Promise<number> {
+  if (activeProvider === 'alpaca') {
+    if (!alpacaEngine) throw new Error('Market data engine has not started');
+    return alpacaEngine.ensureSymbol(symbol);
+  }
   if (activeProvider === 'polygon') {
     if (!polygonEngine) throw new Error('Market data engine has not started');
     return polygonEngine.ensureSymbol(symbol);
