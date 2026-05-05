@@ -8,7 +8,7 @@ import { initWebSocketServer, broadcastTick } from './ws/server';
 import { refreshLeaderboards } from './ws/leaderboard';
 import { startConsumers } from './kafka/consumer';
 import { startFillSimulator, updatePrice, checkLimitOrders } from './kafka/fillSimulator';
-import { startPriceEngine, getLatestPrices } from './simulator/priceEngine';
+import { startMarketDataEngine, getLatestPrices } from './marketData';
 import { disconnectProducer } from './kafka/producer';
 import authRouter from './routes/auth';
 import competitionsRouter from './routes/competitions';
@@ -79,14 +79,15 @@ async function main(): Promise<void> {
   // Kafka fill simulator (processes orders.submitted → fills)
   await startFillSimulator();
 
-  // Price engine (produces to market.ticks)
-  startPriceEngine(TICK_INTERVAL_MS);
+  // Market data engine (simulated GBM or live Alpaca/Polygon feed → Kafka ticks)
+  const marketData = await startMarketDataEngine(TICK_INTERVAL_MS);
 
   console.log('Trading competition platform running');
 
   // Graceful shutdown
   const shutdown = async (): Promise<void> => {
     console.log('Shutting down...');
+    await marketData.stop();
     await disconnectProducer();
     await pool.end();
     process.exit(0);
