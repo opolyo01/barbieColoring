@@ -36,6 +36,7 @@ npm run dev            # http://localhost:3000
    ```
    DATABASE_URL=<railway postgres url>
    JWT_SECRET=<random 32-char string>
+   DATABASE_SSL=true
    SINGLE_INSTANCE_LOCK_ID=42424201
    SERVER_URL=https://your-server.railway.app
    CLIENT_ORIGIN=https://your-app.vercel.app
@@ -91,6 +92,6 @@ Node.js
 
 ## Runtime Notes
 
-- `/health` is a liveness endpoint.
+- `/health` is a liveness endpoint. In production it returns only `{ ok: true }`.
 - `/ready` returns 200 only when the market-data engine is running and the single-instance DB lock is held.
 - If the DB advisory lock connection is lost, the process exits rather than continuing in a potentially split-brain state.

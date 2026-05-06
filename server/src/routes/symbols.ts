@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { getSymbols, getLatestPrices, ensureSymbol } from '../marketData';
 import { updatePrice } from '../tradingEngine';
+import { isValidSymbol, normalizeSymbol } from '../validation';
 
 const router = Router();
 
@@ -13,9 +14,13 @@ router.get('/', requireAuth, (_req, res) => {
 });
 
 router.get('/:symbol', requireAuth, async (req, res) => {
-  const symbol = req.params.symbol?.toUpperCase().trim();
+  const symbol = normalizeSymbol(req.params.symbol);
   if (!symbol) {
     res.status(400).json({ error: 'symbol is required' });
+    return;
+  }
+  if (!isValidSymbol(symbol)) {
+    res.status(400).json({ error: 'Invalid symbol format' });
     return;
   }
 

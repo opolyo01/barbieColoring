@@ -4,8 +4,10 @@ import crypto from 'crypto';
 import pool from '../db/pool';
 import { User } from '../types';
 import { CLIENT_ORIGIN, JWT_SECRET, SERVER_URL } from '../config';
+import { authRateLimiter } from '../rateLimit';
 
 const router = Router();
+router.use(authRateLimiter);
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

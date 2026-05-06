@@ -1,6 +1,7 @@
 import './loadEnv';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import pool from './db/pool';
@@ -13,7 +14,7 @@ import competitionsRouter from './routes/competitions';
 import ordersRouter from './routes/orders';
 import portfolioRouter from './routes/portfolio';
 import symbolsRouter from './routes/symbols';
-import { CLIENT_ORIGIN, PORT, SINGLE_INSTANCE_LOCK_ID, TICK_INTERVAL_MS } from './config';
+import { CLIENT_ORIGIN, IS_PRODUCTION, PORT, SINGLE_INSTANCE_LOCK_ID, TICK_INTERVAL_MS } from './config';
 import { checkPendingOrders, updatePrice } from './tradingEngine';
 import { acquireSingleInstanceLease, type SingleInstanceLease } from './singleInstance';
 
@@ -102,6 +103,12 @@ async function main(): Promise<void> {
 
   // Express HTTP server
   const app = express();
+  app.disable('x-powered-by');
+  app.set('trust proxy', IS_PRODUCTION ? 1 : false);
+  app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }));
   app.use(cors({ origin: CLIENT_ORIGIN }));
   app.use(express.json({ limit: '256kb' }));
 
@@ -112,6 +119,11 @@ async function main(): Promise<void> {
   app.use('/api/symbols', symbolsRouter);
 
   app.get('/health', (_req, res) => {
+    if (IS_PRODUCTION) {
+      res.json({ ok: true });
+      return;
+    }
+
     res.json({
       ok: true,
       ready: runtime.ready,

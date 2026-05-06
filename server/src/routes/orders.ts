@@ -5,10 +5,13 @@ import { createOrder, getTradeHistory, cancelOrder } from '../db/queries/orders'
 import { getEnrollment } from '../db/queries/competitions';
 import { getLatestPrice, updatePrice, executeFill } from '../tradingEngine';
 import { ensureSymbol } from '../marketData';
+import { MAX_ORDER_QTY } from '../config';
+import { orderWriteRateLimiter } from '../rateLimit';
+import { isValidSymbol, normalizeSymbol } from '../validation';
 
 const router = Router();
 
-router.post('/', requireAuth, async (req, res: Response) => {
+router.post('/', orderWriteRateLimiter, requireAuth, async (req, res: Response) => {
   const userId = req.userId!;
   const { competitionId, symbol, side, qty, orderType, limitPrice } = req.body as {
     competitionId?: string;
@@ -18,9 +21,16 @@ router.post('/', requireAuth, async (req, res: Response) => {
     orderType?: string;
     limitPrice?: number;
   };
+  const qtyValue = Number(qty);
+  const limitPriceValue = limitPrice == null ? null : Number(limitPrice);
+  const sym = normalizeSymbol(symbol);
 
-  if (!competitionId || !symbol || !side || !qty || !orderType) {
+  if (!competitionId || !symbol || !side || qty == null || !orderType) {
     res.status(400).json({ error: 'competitionId, symbol, side, qty, orderType are required' });
+    return;
+  }
+  if (!isValidSymbol(sym)) {
+    res.status(400).json({ error: 'symbol must be 1-10 chars and contain only A-Z, 0-9, dot, or hyphen' });
     return;
   }
   if (!['BUY', 'SELL'].includes(side)) {
@@ -31,11 +41,15 @@ router.post('/', requireAuth, async (req, res: Response) => {
     res.status(400).json({ error: 'orderType must be MARKET or LIMIT' });
     return;
   }
-  if (qty <= 0 || !Number.isFinite(qty)) {
+  if (qtyValue <= 0 || !Number.isFinite(qtyValue)) {
     res.status(400).json({ error: 'qty must be a positive number' });
     return;
   }
-  if (orderType === 'LIMIT' && (!limitPrice || limitPrice <= 0)) {
+  if (qtyValue > MAX_ORDER_QTY) {
+    res.status(400).json({ error: `qty must be <= ${MAX_ORDER_QTY.toLocaleString('en-US')}` });
+    return;
+  }
+  if (orderType === 'LIMIT' && (limitPriceValue == null || !Number.isFinite(limitPriceValue) || limitPriceValue <= 0)) {
     res.status(400).json({ error: 'limitPrice is required for LIMIT orders' });
     return;
   }
@@ -47,7 +61,6 @@ router.post('/', requireAuth, async (req, res: Response) => {
   }
 
   // Ensure symbol is tracked by the market data engine; seed the in-process price cache if new.
-  const sym = symbol.toUpperCase();
   let currentPrice = getLatestPrice(sym);
   if (!currentPrice) {
     currentPrice = await ensureSymbol(sym);
@@ -57,11 +70,11 @@ router.post('/', requireAuth, async (req, res: Response) => {
   const order = await createOrder(
     userId,
     competitionId,
-    symbol.toUpperCase(),
+    sym,
     side as OrderSide,
-    qty,
+    qtyValue,
     orderType as OrderType,
-    limitPrice ?? null,
+    limitPriceValue,
   );
 
   // MARKET orders: fill synchronously right now so the caller gets an immediate
@@ -84,7 +97,7 @@ router.post('/', requireAuth, async (req, res: Response) => {
   res.status(202).json(order);
 });
 
-router.delete('/:orderId', requireAuth, async (req, res: Response) => {
+router.delete('/:orderId', orderWriteRateLimiter, requireAuth, async (req, res: Response) => {
   const userId = req.userId!;
   const cancelled = await cancelOrder(req.params.orderId, userId);
   if (!cancelled) {

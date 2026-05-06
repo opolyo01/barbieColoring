@@ -10,8 +10,8 @@ function requireValue(name: string): string {
 
 function requireJwtSecret(): string {
   const value = requireValue('JWT_SECRET');
-  if (!value || value === 'secret' || value.length < 16) {
-    throw new Error('JWT_SECRET must be set to a strong random value (16+ chars) before starting the server');
+  if (!value || value === 'secret' || value.length < 32) {
+    throw new Error('JWT_SECRET must be set to a strong random value (32+ chars) before starting the server');
   }
   return value;
 }
@@ -19,6 +19,14 @@ function requireJwtSecret(): string {
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseBoolean(value: string | undefined): boolean | undefined {
+  if (value == null) return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true') return true;
+  if (normalized === 'false') return false;
+  return undefined;
 }
 
 function parseLockId(value: string | undefined, fallback: number): number {
@@ -39,9 +47,7 @@ export const NODE_ENV = process.env.NODE_ENV?.trim() || 'development';
 export const IS_PRODUCTION = NODE_ENV === 'production';
 export const JWT_SECRET = requireJwtSecret();
 export const DATABASE_URL = requireValue('DATABASE_URL');
-export const DATABASE_SSL = DATABASE_URL.includes('railway') || DATABASE_URL.includes('render')
-  ? { rejectUnauthorized: false }
-  : false;
+export const DATABASE_SSL = parseBoolean(process.env.DATABASE_SSL) ?? IS_PRODUCTION;
 export const PORT = parsePositiveInt(process.env.PORT, 4000);
 export const SERVER_URL = assertNonLocalUrl(
   'SERVER_URL',
@@ -55,3 +61,8 @@ export const CLIENT_ORIGIN = assertNonLocalUrl(
 );
 export const TICK_INTERVAL_MS = parsePositiveInt(process.env.TICK_INTERVAL_MS, 1000);
 export const SINGLE_INSTANCE_LOCK_ID = parseLockId(process.env.SINGLE_INSTANCE_LOCK_ID, 42424201);
+export const MAX_ORDER_QTY = parsePositiveInt(process.env.MAX_ORDER_QTY, 1_000_000);
+export const AUTH_RATE_LIMIT_WINDOW_MS = parsePositiveInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000);
+export const AUTH_RATE_LIMIT_MAX = parsePositiveInt(process.env.AUTH_RATE_LIMIT_MAX, 120);
+export const ORDER_RATE_LIMIT_WINDOW_MS = parsePositiveInt(process.env.ORDER_RATE_LIMIT_WINDOW_MS, 60 * 1000);
+export const ORDER_RATE_LIMIT_MAX = parsePositiveInt(process.env.ORDER_RATE_LIMIT_MAX, 300);

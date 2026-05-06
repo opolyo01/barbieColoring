@@ -103,6 +103,7 @@ The recommended stack is **Railway** (server + Postgres) + **Vercel** (client).
 ```
 DATABASE_URL        = <Railway Postgres connection URL>
 JWT_SECRET          = <any random 32+ character string>
+DATABASE_SSL        = true
 SINGLE_INSTANCE_LOCK_ID = 42424201
 SERVER_URL          = https://your-server.railway.app
 CLIENT_ORIGIN       = https://your-app.vercel.app
@@ -143,10 +144,16 @@ VITE_WS_URL    = wss://your-server.railway.app/ws
 |---|---|---|
 | `PORT` | HTTP server port | `4000` |
 | `JWT_SECRET` | Secret for signing JWTs | — |
+| `DATABASE_SSL` | Enable TLS for PostgreSQL connections | `false` in local dev, `true` recommended in prod |
 | `SERVER_URL` | Public URL of this server | `http://localhost:4000` |
 | `CLIENT_ORIGIN` | Frontend URL (CORS + OAuth redirect) | `http://localhost:3000` |
 | `DATABASE_URL` | PostgreSQL connection string | — |
 | `SINGLE_INSTANCE_LOCK_ID` | PostgreSQL advisory lock ID used to enforce one active backend instance | `42424201` |
+| `MAX_ORDER_QTY` | Upper bound for one order request | `1000000` |
+| `AUTH_RATE_LIMIT_WINDOW_MS` | Auth rate-limit window | `900000` |
+| `AUTH_RATE_LIMIT_MAX` | Max auth requests per window | `120` |
+| `ORDER_RATE_LIMIT_WINDOW_MS` | Order write rate-limit window | `60000` |
+| `ORDER_RATE_LIMIT_MAX` | Max order write requests per window | `300` |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID | — |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | — |
 | `TICK_INTERVAL_MS` | Price tick frequency in ms | `1000` |
@@ -215,7 +222,7 @@ Each live adapter:
 The no-Kafka architecture is intentionally hardened for **one active backend instance per database**.
 
 - Startup acquires a PostgreSQL advisory lock and exits if another instance already holds it.
-- `/health` reports liveness and lock state.
+- `/health` reports detailed liveness only outside production; production responses are scrubbed to `{ ok: true }`.
 - `/ready` only goes green after market data is up and the single-instance lock is held.
 - If the lock connection is lost, the process shuts itself down rather than continuing in a split-brain state.
 
