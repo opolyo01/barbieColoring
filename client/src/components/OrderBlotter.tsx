@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import '../agGridSetup';
 import { AgGridReact } from 'ag-grid-react';
 import {
   themeQuartz,

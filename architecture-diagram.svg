@@ -1,0 +1,286 @@
+<svg width="1800" height="1000" viewBox="0 0 1800 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="60" x2="1680" y2="940" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0B1020"/>
+      <stop offset="0.55" stop-color="#101827"/>
+      <stop offset="1" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#172033"/>
+      <stop offset="1" stop-color="#101827"/>
+    </linearGradient>
+    <linearGradient id="nodePanel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14223A"/>
+      <stop offset="1" stop-color="#0E1728"/>
+    </linearGradient>
+    <linearGradient id="accentBlue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+    <linearGradient id="accentGreen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset="1" stop-color="#10B981"/>
+    </linearGradient>
+    <linearGradient id="accentOrange" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FBBF24"/>
+      <stop offset="1" stop-color="#F97316"/>
+    </linearGradient>
+    <linearGradient id="accentViolet" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#A78BFA"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <filter id="shadow" x="-40" y="-40" width="1880" height="1080" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#020617" flood-opacity="0.45"/>
+    </filter>
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10V0Z" fill="#38BDF8"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10V0Z" fill="#34D399"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10V0Z" fill="#F59E0B"/>
+    </marker>
+    <marker id="arrowViolet" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10V0Z" fill="#8B5CF6"/>
+    </marker>
+  </defs>
+
+  <rect width="1800" height="1000" fill="url(#bg)"/>
+  <circle cx="250" cy="140" r="170" fill="#0EA5E9" fill-opacity="0.07" filter="url(#softGlow)"/>
+  <circle cx="1510" cy="180" r="180" fill="#8B5CF6" fill-opacity="0.09" filter="url(#softGlow)"/>
+  <circle cx="1480" cy="870" r="210" fill="#22C55E" fill-opacity="0.06" filter="url(#softGlow)"/>
+
+  <text x="90" y="88" fill="#E5EEF9" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="38" font-weight="700">
+    Trading Simulator Architecture
+  </text>
+  <text x="90" y="126" fill="#8FA3BF" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="18">
+    Current runtime after Kafka removal: client UI, single Node backend, live or simulated pricing, and Postgres state.
+  </text>
+
+  <g filter="url(#shadow)">
+    <rect x="1320" y="72" rx="18" ry="18" width="360" height="54" fill="#0F1A2D" stroke="#24324A"/>
+    <circle cx="1350" cy="99" r="7" fill="#34D399"/>
+    <text x="1370" y="106" fill="#D6E3F3" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="18" font-weight="600">
+      No Kafka / single active backend instance
+    </text>
+  </g>
+
+  <text x="114" y="182" fill="#64748B" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="15" letter-spacing="0.18em">
+    BROWSER
+  </text>
+  <text x="548" y="142" fill="#64748B" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="15" letter-spacing="0.18em">
+    APPLICATION SERVER
+  </text>
+  <text x="1390" y="182" fill="#64748B" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="15" letter-spacing="0.18em">
+    PRICING FEEDS
+  </text>
+  <text x="720" y="850" fill="#64748B" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="15" letter-spacing="0.18em">
+    STATE STORAGE
+  </text>
+
+  <g filter="url(#shadow)">
+    <rect x="80" y="200" width="370" height="560" rx="28" fill="url(#panel)" stroke="#24324A"/>
+    <rect x="110" y="232" width="56" height="42" rx="10" fill="#0F172A" stroke="#2C3D5B"/>
+    <rect x="121" y="244" width="34" height="22" rx="4" fill="url(#accentBlue)"/>
+    <text x="188" y="255" fill="#E8F1FB" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="30" font-weight="700">
+      Client UI
+    </text>
+    <text x="188" y="287" fill="#8FA3BF" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="18">
+      React + Vite running in the browser
+    </text>
+
+    <rect x="110" y="328" width="310" height="78" rx="18" fill="#0E1728" stroke="#24324A"/>
+    <text x="136" y="360" fill="#9CCBFF" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="0.12em">
+      PUBLIC ENTRY
+    </text>
+    <text x="136" y="389" fill="#E5EEF9" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="24" font-weight="600">
+      Landing + Google Login
+    </text>
+
+    <rect x="110" y="426" width="310" height="78" rx="18" fill="#0E1728" stroke="#24324A"/>
+    <text x="136" y="458" fill="#9CCBFF" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="0.12em">
+      LEAGUE FLOW
+    </text>
+    <text x="136" y="487" fill="#E5EEF9" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="24" font-weight="600">
+      Competitions + Admin
+    </text>
+
+    <rect x="110" y="524" width="310" height="146" rx="18" fill="#0E1728" stroke="#24324A"/>
+    <text x="136" y="556" fill="#9CCBFF" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="0.12em">
+      TRADING ROOM
+    </text>
+    <text x="136" y="585" fill="#E5EEF9" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="22" font-weight="600">
+      PM / OE / Blotter
+    </text>
+    <text x="136" y="613" fill="#E5EEF9" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="22" font-weight="600">
+      Leaderboard
+    </text>
+    <text x="136" y="648" fill="#8FA3BF" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="18">
+      HTTP for page data and order submits.
+    </text>
+    <text x="136" y="676" fill="#8FA3BF" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="18">
+      WebSocket for ticks, fills, and rankings.
+    </text>
+
+    <rect x="110" y="698" width="310" height="34" rx="17" fill="#0B1220" stroke="#24324A"/>
+    <text x="155" y="721" fill="#D6E3F3" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="600">
+      Browser state + local AG Grid views
+    </text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="510" y="160" width="780" height="620" rx="32" fill="url(#nodePanel)" stroke="#2C3D5B"/>
+    <text x="550" y="220" fill="#E8F1FB" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="34" font-weight="700">
+      Node App
+    </text>
+    <text x="550" y="254" fill="#8FA3BF" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="19">
+      Express API + attached WebSocket server + in-process trading engine
+    </text>
+
+    <rect x="550" y="292" width="312" height="132" rx="22" fill="#0F1A2D" stroke="#2F4365"/>
+    <text x="578" y="330" fill="#7DD3FC" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="0.12em">
+      EDGE
+    </text>
+    <text x="578" y="364" fill="#E5EEF9" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="28" font-weight="600">
+      REST API
+    </text>
+    <text x="578" y="395" fill="#9FB0C7" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="18">
+      /auth  /competitions  /orders
+    </text>
+    <text x="578" y="422" fill="#9FB0C7" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="18">
+      /portfolio  /symbols
+    </text>
+
+    <rect x="890" y="292" width="360" height="132" rx="22" fill="#0F1A2D" stroke="#2F4365"/>
+    <text x="918" y="330" fill="#86EFAC" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="0.12em">
+      LIVE DELIVERY
+    </text>
+    <text x="918" y="364" fill="#E5EEF9" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="28" font-weight="600">
+      WebSocket Gateway
+    </text>
+    <text x="918" y="395" fill="#9FB0C7" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="18">
+      /ws auth + room subscriptions
+    </text>
+    <text x="918" y="422" fill="#9FB0C7" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="18">
+      ticks, fills, leaderboard fanout
+    </text>
+
+    <rect x="550" y="454" width="700" height="164" rx="24" fill="#0D1628" stroke="#2F4365"/>
+    <text x="580" y="494" fill="#C4B5FD" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="0.12em">
+      CORE ENGINE
+    </text>
+    <text x="580" y="532" fill="#E5EEF9" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="30" font-weight="600">
+      In-process Trading Engine
+    </text>
+    <text x="580" y="567" fill="#A8B8CD" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="19">
+      Price cache, risk checks, pending-order scans, fills, trade recording,
+    </text>
+    <text x="580" y="595" fill="#A8B8CD" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="19">
+      leaderboard refresh, and request-time symbol hydration.
+    </text>
+
+    <rect x="580" y="641" width="290" height="92" rx="18" fill="#0F1A2D" stroke="#24324A"/>
+    <text x="606" y="676" fill="#FCD34D" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="0.12em">
+      PRICING ADAPTERS
+    </text>
+    <text x="606" y="704" fill="#E5EEF9" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="20" font-weight="600">
+      Simulated / Alpaca /
+    </text>
+    <text x="606" y="728" fill="#E5EEF9" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="20" font-weight="600">
+      Polygon / Massive
+    </text>
+
+    <rect x="900" y="641" width="320" height="92" rx="18" fill="#0F1A2D" stroke="#24324A"/>
+    <text x="926" y="676" fill="#FCA5A5" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="0.12em">
+      SINGLE INSTANCE SAFETY
+    </text>
+    <text x="926" y="711" fill="#E5EEF9" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="22" font-weight="600">
+      PG advisory lock + /health + /ready
+    </text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="1340" y="200" width="380" height="390" rx="28" fill="url(#panel)" stroke="#24324A"/>
+    <text x="1378" y="254" fill="#E8F1FB" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="30" font-weight="700">
+      Market Data
+    </text>
+    <text x="1378" y="286" fill="#8FA3BF" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="18">
+      The app can run against one of these providers.
+    </text>
+
+    <rect x="1378" y="330" width="304" height="74" rx="18" fill="#101A2B" stroke="#2B3D5B"/>
+    <circle cx="1415" cy="367" r="10" fill="#60A5FA"/>
+    <text x="1442" y="362" fill="#D9E6F7" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="0.10em">
+      TEST / DEV
+    </text>
+    <text x="1442" y="387" fill="#F8FAFC" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="24" font-weight="600">
+      Simulated Price Engine
+    </text>
+
+    <rect x="1378" y="424" width="304" height="74" rx="18" fill="#101A2B" stroke="#2B3D5B"/>
+    <circle cx="1415" cy="461" r="10" fill="#34D399"/>
+    <text x="1442" y="456" fill="#D9E6F7" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="0.10em">
+      LIVE
+    </text>
+    <text x="1442" y="481" fill="#F8FAFC" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="24" font-weight="600">
+      Alpaca IEX trades
+    </text>
+
+    <rect x="1378" y="518" width="304" height="74" rx="18" fill="#101A2B" stroke="#2B3D5B"/>
+    <circle cx="1415" cy="555" r="10" fill="#F59E0B"/>
+    <text x="1442" y="550" fill="#D9E6F7" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="0.10em">
+      LIVE ALTERNATE
+    </text>
+    <text x="1442" y="575" fill="#F8FAFC" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="24" font-weight="600">
+      Polygon / Massive
+    </text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="660" y="860" width="480" height="102" rx="26" fill="url(#panel)" stroke="#24324A"/>
+    <rect x="692" y="889" width="44" height="44" rx="10" fill="#0F172A" stroke="#2B3D5B"/>
+    <ellipse cx="714" cy="902" rx="14" ry="6" fill="#A78BFA"/>
+    <path d="M700 903V920C700 923 706 925 714 925C722 925 728 923 728 920V903" stroke="#A78BFA" stroke-width="3" stroke-linecap="round"/>
+    <text x="760" y="904" fill="#D9E6F7" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="0.12em">
+      POSTGRES
+    </text>
+    <text x="760" y="934" fill="#F8FAFC" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="24" font-weight="600">
+      Users, competitions, portfolios, orders, trades
+    </text>
+  </g>
+
+  <path d="M450 394C490 394 495 358 550 358" stroke="#38BDF8" stroke-width="8" stroke-linecap="round" marker-end="url(#arrowBlue)"/>
+  <text x="458" y="368" fill="#A7DFFF" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="600">
+    HTTP / REST
+  </text>
+
+  <path d="M890 400C760 400 690 444 450 444" stroke="#34D399" stroke-width="8" stroke-linecap="round" marker-end="url(#arrowGreen)"/>
+  <text x="632" y="432" fill="#ABF7D0" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="600">
+    /ws live ticks, fills, leaderboard
+  </text>
+
+  <path d="M1340 402C1300 402 1288 402 1250 402" stroke="#F59E0B" stroke-width="8" stroke-linecap="round" marker-end="url(#arrowOrange)"/>
+  <text x="1284" y="378" fill="#FED7AA" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="600" text-anchor="end">
+    price ticks
+  </text>
+
+  <path d="M900 780C900 820 900 828 900 860" stroke="#8B5CF6" stroke-width="8" stroke-linecap="round" marker-end="url(#arrowViolet)"/>
+  <text x="930" y="834" fill="#D8B4FE" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="16" font-weight="600">
+    reads + writes
+  </text>
+
+  <path d="M1180 358C1295 358 1310 332 1378 332" stroke="#38BDF8" stroke-opacity="0.45" stroke-width="4" stroke-dasharray="10 10" stroke-linecap="round"/>
+  <path d="M1180 688C1290 688 1310 592 1378 592" stroke="#38BDF8" stroke-opacity="0.35" stroke-width="4" stroke-dasharray="10 10" stroke-linecap="round"/>
+
+  <text x="90" y="955" fill="#64748B" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="17">
+    Local development note: Docker only runs Postgres. The client and Node server run locally with Vite and npm run dev.
+  </text>
+</svg>

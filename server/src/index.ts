@@ -4,47 +4,106 @@ import cors from 'cors';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import pool from './db/pool';
-import { initWebSocketServer, broadcastTick, sendToUser } from './ws/server';
+import { Server as HttpServer } from 'http';
+import { initWebSocketServer, broadcastTick, closeWebSocketServer, getConnectedClientCount } from './ws/server';
 import { refreshLeaderboards } from './ws/leaderboard';
-import { startConsumers } from './kafka/consumer';
-import { startFillSimulator, updatePrice, checkLimitOrders } from './kafka/fillSimulator';
-import { startMarketDataEngine, getLatestPrices } from './marketData';
-import { disconnectProducer } from './kafka/producer';
+import { startMarketDataEngine, getLatestPrices, getMarketDataProvider, type MarketDataController } from './marketData';
 import authRouter from './routes/auth';
 import competitionsRouter from './routes/competitions';
 import ordersRouter from './routes/orders';
 import portfolioRouter from './routes/portfolio';
 import symbolsRouter from './routes/symbols';
-
-const PORT = Number(process.env.PORT ?? 4000);
-const WS_PORT = Number(process.env.WS_PORT ?? 4001);
-const TICK_INTERVAL_MS = Number(process.env.TICK_INTERVAL_MS ?? 1000);
+import { CLIENT_ORIGIN, PORT, SINGLE_INSTANCE_LOCK_ID, TICK_INTERVAL_MS } from './config';
+import { checkPendingOrders, updatePrice } from './tradingEngine';
+import { acquireSingleInstanceLease, type SingleInstanceLease } from './singleInstance';
 
 async function migrate(): Promise<void> {
-  const schemaPath = join(__dirname, '../src/db/schema.sql');
-  try {
-    const sql = readFileSync(schemaPath, 'utf8');
-    await pool.query(sql);
-    console.log('Database schema applied');
-  } catch {
-    // In production the dist path differs
+  const schemaPaths = [
+    join(__dirname, '../src/db/schema.sql'),
+    join(__dirname, 'db/schema.sql'),
+  ];
+
+  let lastError: unknown;
+  for (const schemaPath of schemaPaths) {
     try {
-      const sql = readFileSync(join(__dirname, 'db/schema.sql'), 'utf8');
+      const sql = readFileSync(schemaPath, 'utf8');
       await pool.query(sql);
       console.log('Database schema applied');
+      return;
     } catch (err) {
-      console.warn('Could not run migration automatically:', err);
+      lastError = err;
     }
   }
+
+  throw new Error(`Could not run database migration automatically: ${String(lastError)}`);
+}
+
+async function shutdownWithError(err: unknown): Promise<never> {
+  await pool.end().catch(() => {});
+  throw err;
 }
 
 async function main(): Promise<void> {
   await migrate();
 
+  const runtime = {
+    startedAt: new Date().toISOString(),
+    ready: false,
+    shuttingDown: false,
+    singleInstanceLockHeld: false,
+    marketDataProvider: getMarketDataProvider(),
+  };
+  let marketData: MarketDataController | null = null;
+  let httpServer: HttpServer | null = null;
+  let lease: SingleInstanceLease | null = null;
+  let shutdownPromise: Promise<void> | null = null;
+
+  const shutdown = async (exitCode = 0, err?: unknown): Promise<void> => {
+    if (shutdownPromise) return shutdownPromise;
+
+    runtime.ready = false;
+    runtime.shuttingDown = true;
+    if (err) {
+      console.error('Shutdown triggered by runtime error:', err);
+    }
+
+    shutdownPromise = (async () => {
+      if (marketData) {
+        await marketData.stop().catch((stopErr) => console.error('Market data stop failed:', stopErr));
+        marketData = null;
+      }
+
+      await closeWebSocketServer().catch((wsErr) => console.error('WebSocket close failed:', wsErr));
+
+      if (httpServer) {
+        await new Promise<void>((resolve) => {
+          httpServer?.close(() => resolve());
+        });
+        httpServer = null;
+      }
+
+      if (lease) {
+        await lease.release().catch((lockErr) => console.error('Single-instance lease release failed:', lockErr));
+        runtime.singleInstanceLockHeld = false;
+        lease = null;
+      }
+
+      await pool.end().catch((poolErr) => console.error('DB pool shutdown failed:', poolErr));
+      process.exit(exitCode);
+    })();
+
+    return shutdownPromise;
+  };
+
+  lease = await acquireSingleInstanceLease((err) => {
+    void shutdown(1, err);
+  }).catch(shutdownWithError);
+  runtime.singleInstanceLockHeld = lease.isHeld();
+
   // Express HTTP server
   const app = express();
-  app.use(cors({ origin: process.env.CLIENT_ORIGIN ?? '*' }));
-  app.use(express.json());
+  app.use(cors({ origin: CLIENT_ORIGIN }));
+  app.use(express.json({ limit: '256kb' }));
 
   app.use('/api/auth', authRouter);
   app.use('/api/competitions', competitionsRouter);
@@ -52,48 +111,61 @@ async function main(): Promise<void> {
   app.use('/api/portfolio', portfolioRouter);
   app.use('/api/symbols', symbolsRouter);
 
-  app.get('/health', (_req, res) => res.json({ ok: true }));
+  app.get('/health', (_req, res) => {
+    res.json({
+      ok: true,
+      ready: runtime.ready,
+      shuttingDown: runtime.shuttingDown,
+      marketDataProvider: runtime.marketDataProvider,
+      singleInstance: {
+        enforced: true,
+        lockHeld: runtime.singleInstanceLockHeld,
+        lockId: SINGLE_INSTANCE_LOCK_ID,
+      },
+      websocketClients: getConnectedClientCount(),
+      startedAt: runtime.startedAt,
+    });
+  });
 
-  app.listen(PORT, () => console.log(`HTTP server on http://localhost:${PORT}`));
+  app.get('/ready', (_req, res) => {
+    const ready = runtime.ready && runtime.singleInstanceLockHeld && !runtime.shuttingDown;
+    res.status(ready ? 200 : 503).json({
+      ok: ready,
+      marketDataProvider: runtime.marketDataProvider,
+      singleInstanceLockHeld: runtime.singleInstanceLockHeld,
+      shuttingDown: runtime.shuttingDown,
+    });
+  });
+
+  httpServer = app.listen(PORT, () => console.log(`HTTP server on http://localhost:${PORT}`));
+  httpServer.on('error', (err) => {
+    void shutdown(1, err);
+  });
 
   // WebSocket server
-  initWebSocketServer(WS_PORT);
+  initWebSocketServer(httpServer);
 
-  // Kafka consumers: ticks → broadcast + leaderboard; fills → notify user
-  await startConsumers(
-    (tick) => {
-      updatePrice(tick.symbol, tick.price);
-      broadcastTick(tick);
+  // Market data engine (simulated or live provider) calls back directly on each tick.
+  marketData = await startMarketDataEngine(TICK_INTERVAL_MS, (tick) => {
+    updatePrice(tick.symbol, tick.price);
+    broadcastTick(tick);
 
-      // Throttled leaderboard + limit order check on each tick
-      const prices = getLatestPrices();
-      refreshLeaderboards(prices).catch(console.error);
-      checkLimitOrders().catch(console.error);
-    },
-    (order) => {
-      sendToUser(order.user_id, { type: 'filled', data: order as never });
-    },
-  );
+    const prices = getLatestPrices();
+    refreshLeaderboards(prices).catch(console.error);
+    checkPendingOrders().catch(console.error);
+  }).catch(async (err) => {
+    await shutdown(1, err);
+    throw err;
+  });
+  runtime.marketDataProvider = getMarketDataProvider();
+  runtime.ready = true;
 
-  // Kafka fill simulator (processes orders.submitted → fills)
-  await startFillSimulator();
+  console.log(`Trading competition platform running (single-instance lock ${lease.lockId})`);
 
-  // Market data engine (simulated or live provider) publishes to market.ticks
-  const marketData = await startMarketDataEngine(TICK_INTERVAL_MS);
-
-  console.log('Trading competition platform running');
-
-  // Graceful shutdown
-  const shutdown = async (): Promise<void> => {
-    console.log('Shutting down...');
-    await marketData.stop();
-    await disconnectProducer();
-    await pool.end();
-    process.exit(0);
-  };
-
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', () => { void shutdown(0); });
+  process.on('SIGINT', () => { void shutdown(0); });
+  process.on('uncaughtException', (err) => { void shutdown(1, err); });
+  process.on('unhandledRejection', (err) => { void shutdown(1, err); });
 }
 
 main().catch((err) => {

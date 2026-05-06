@@ -3,6 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 
+const POST_LOGIN_REDIRECT_KEY = 'tradebattle_post_login_redirect';
+
+function normalizeReturnTo(value: string | null): string {
+  return value && value.startsWith('/') ? value : '/competitions';
+}
+
 export default function OAuthCallback() {
   const [searchParams] = useSearchParams();
   const { login } = useAuth();
@@ -13,10 +19,12 @@ export default function OAuthCallback() {
     if (didRun.current) return;
     didRun.current = true;
 
-    const token = searchParams.get('token');
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const token = hash.get('token') ?? searchParams.get('token');
     const error = searchParams.get('error');
 
     if (error || !token) {
+      localStorage.removeItem(POST_LOGIN_REDIRECT_KEY);
       navigate(`/login?error=${encodeURIComponent(error ?? 'Sign-in failed')}`);
       return;
     }
@@ -24,9 +32,12 @@ export default function OAuthCallback() {
     api.auth.me(token)
       .then((user) => {
         login(user, token);
-        navigate('/competitions', { replace: true });
+        const returnTo = normalizeReturnTo(localStorage.getItem(POST_LOGIN_REDIRECT_KEY));
+        localStorage.removeItem(POST_LOGIN_REDIRECT_KEY);
+        navigate(returnTo, { replace: true });
       })
       .catch(() => {
+        localStorage.removeItem(POST_LOGIN_REDIRECT_KEY);
         navigate('/login?error=Could+not+load+profile');
       });
   }, []);

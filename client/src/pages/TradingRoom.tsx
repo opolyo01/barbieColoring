@@ -53,6 +53,15 @@ export default function TradingRoom() {
     refreshOrders();
   }, [token, competitionId]);
 
+  useEffect(() => {
+    if (!token || !competitionId) return;
+    api.competitions.leaderboard(competitionId, token)
+      .then(setRankings)
+      .catch(() => {
+        // Live websocket updates will still populate rankings if the initial fetch fails transiently.
+      });
+  }, [token, competitionId]);
+
   function refreshPortfolio() {
     if (!token || !competitionId) return;
     api.portfolio.get(competitionId, token).then((data) => {

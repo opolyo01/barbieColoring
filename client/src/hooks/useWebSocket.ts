@@ -1,7 +1,19 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { WsMessage } from '../types';
 
-const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:4001';
+function deriveWsUrl(): string {
+  const explicit = import.meta.env.VITE_WS_URL;
+  if (explicit) return explicit;
+
+  const apiUrl = import.meta.env.VITE_API_URL;
+  if (apiUrl) {
+    return apiUrl.replace(/^http/i, 'ws').replace(/\/$/, '') + '/ws';
+  }
+
+  return 'ws://localhost:4000/ws';
+}
+
+const WS_URL = deriveWsUrl();
 
 type MessageHandler = (msg: WsMessage) => void;
 
@@ -11,6 +23,7 @@ export function useWebSocket(token: string | null, onMessage: MessageHandler) {
   onMessageRef.current = onMessage;
 
   const subscriptionsRef = useRef<Set<string>>(new Set());
+  const authenticatedRef = useRef(false);
 
   const send = useCallback((data: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -20,12 +33,16 @@ export function useWebSocket(token: string | null, onMessage: MessageHandler) {
 
   const subscribe = useCallback((competitionId: string) => {
     subscriptionsRef.current.add(competitionId);
-    send({ type: 'subscribe', competitionId });
+    if (authenticatedRef.current) {
+      send({ type: 'subscribe', competitionId });
+    }
   }, [send]);
 
   const unsubscribe = useCallback((competitionId: string) => {
     subscriptionsRef.current.delete(competitionId);
-    send({ type: 'unsubscribe', competitionId });
+    if (authenticatedRef.current) {
+      send({ type: 'unsubscribe', competitionId });
+    }
   }, [send]);
 
   useEffect(() => {
@@ -38,20 +55,26 @@ export function useWebSocket(token: string | null, onMessage: MessageHandler) {
     function connect() {
       ws = new WebSocket(WS_URL);
       wsRef.current = ws;
+      authenticatedRef.current = false;
 
       ws.onopen = () => {
         ws.send(JSON.stringify({ type: 'auth', token }));
-        // Re-subscribe to all active competitions after reconnect
-        for (const id of subscriptionsRef.current) {
-          ws.send(JSON.stringify({ type: 'subscribe', competitionId: id }));
-        }
       };
 
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data as string) as WsMessage;
-          // Ignore empty error acks used for auth confirmation
-          if (msg.type === 'error' && msg.message === '') return;
+          if (msg.type === 'auth') {
+            authenticatedRef.current = msg.ok;
+            if (msg.ok) {
+              for (const id of subscriptionsRef.current) {
+                ws.send(JSON.stringify({ type: 'subscribe', competitionId: id }));
+              }
+            } else {
+              ws.close();
+            }
+            return;
+          }
           onMessageRef.current(msg);
         } catch {
           // ignore malformed messages
@@ -59,6 +82,7 @@ export function useWebSocket(token: string | null, onMessage: MessageHandler) {
       };
 
       ws.onclose = () => {
+        authenticatedRef.current = false;
         if (!unmounted) {
           reconnectTimer = setTimeout(connect, 3000);
         }

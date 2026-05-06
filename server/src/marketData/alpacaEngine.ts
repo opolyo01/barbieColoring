@@ -1,5 +1,4 @@
 import WebSocket, { RawData } from 'ws';
-import { publishTick } from '../kafka/producer';
 import { PriceTick } from '../types';
 
 interface AlpacaEngineOptions {
@@ -8,6 +7,7 @@ interface AlpacaEngineOptions {
   symbols: string[];
   publishIntervalMs: number;
   snapshotRefreshMs: number;
+  onTick: (tick: PriceTick) => void | Promise<void>;
 }
 
 interface SymbolState extends PriceTick {
@@ -70,6 +70,7 @@ export class AlpacaEngine {
   private readonly apiSecret: string;
   private readonly publishIntervalMs: number;
   private readonly snapshotRefreshMs: number;
+  private readonly onTick: (tick: PriceTick) => void | Promise<void>;
   private readonly includeQuotes = false;
   private readonly trackedSymbols = new Set<string>();
   private readonly states = new Map<string, SymbolState>();
@@ -87,6 +88,7 @@ export class AlpacaEngine {
     this.apiSecret = options.apiSecret;
     this.publishIntervalMs = Math.max(options.publishIntervalMs, 250);
     this.snapshotRefreshMs = Math.max(options.snapshotRefreshMs, 5_000);
+    this.onTick = options.onTick;
 
     for (const sym of options.symbols) {
       this.trackedSymbols.add(sym.toUpperCase());
@@ -165,8 +167,8 @@ export class AlpacaEngine {
           ts: state.ts,
         };
 
-        publishTick(tick).catch((err: Error) => {
-          console.error(`[alpaca] Failed to publish tick for ${tick.symbol}:`, err.message);
+        Promise.resolve(this.onTick(tick)).catch((err: Error) => {
+          console.error(`[alpaca] Failed to process tick for ${tick.symbol}:`, err.message);
         });
       }
     }, this.publishIntervalMs);

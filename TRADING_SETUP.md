@@ -6,14 +6,14 @@
 ```bash
 docker compose up -d
 ```
-Starts Kafka (KRaft, no Zookeeper) + PostgreSQL.
+Starts PostgreSQL.
 
 ### 2. Server
 ```bash
 cd server
 cp .env.example .env   # edit if needed
 npm install
-npm run dev            # http://localhost:4000  ws://localhost:4001
+npm run dev            # http://localhost:4000  ws://localhost:4000/ws
 ```
 
 ### 3. Client
@@ -26,7 +26,7 @@ npm run dev            # http://localhost:3000
 
 ---
 
-## Deploy to Railway + Vercel + Upstash
+## Deploy to Railway + Vercel
 
 ### Railway (server + postgres)
 1. Create a new Railway project
@@ -36,25 +36,22 @@ npm run dev            # http://localhost:3000
    ```
    DATABASE_URL=<railway postgres url>
    JWT_SECRET=<random 32-char string>
-   KAFKA_BROKERS=<upstash broker url>
-   KAFKA_USERNAME=<upstash username>
-   KAFKA_PASSWORD=<upstash password>
+   SINGLE_INSTANCE_LOCK_ID=42424201
+   SERVER_URL=https://your-server.railway.app
    CLIENT_ORIGIN=https://your-app.vercel.app
+   GOOGLE_CLIENT_ID=<google oauth client id>
+   GOOGLE_CLIENT_SECRET=<google oauth client secret>
    ```
 5. Build command: `npm install && npm run build`
 6. Start command: `npm start`
-
-### Upstash Kafka (free)
-1. Create account at upstash.com
-2. Create a Kafka cluster (free tier)
-3. Copy broker URL, username, password → Railway env vars
+7. Keep the backend service at one active instance. This app enforces a PostgreSQL advisory lock for single-instance runtime safety.
 
 ### Vercel (client)
 1. Import the `/client` folder
 2. Set environment variables:
    ```
    VITE_API_URL=https://your-server.railway.app
-   VITE_WS_URL=wss://your-server.railway.app
+   VITE_WS_URL=wss://your-server.railway.app/ws
    ```
 3. Build command: `npm run build`
 4. Output dir: `dist`
@@ -68,14 +65,14 @@ The only interface the rest of the app uses is:
 
 ```typescript
 // Called every tick
-publishTick(tick: PriceTick): Promise<void>
+onTick(tick: PriceTick): void | Promise<void>
 
 // Called by routes/portfolio.ts and leaderboard
 getLatestPrices(): Map<string, number>
 getSymbols(): string[]
 ```
 
-Example: Alpaca WebSocket → publishTick → everything else stays identical.
+Example: Alpaca WebSocket → `onTick` callback → everything else stays identical.
 
 ---
 
@@ -84,12 +81,16 @@ Example: Alpaca WebSocket → publishTick → everything else stays identical.
 ```
 React (Vite)
   ↕ REST   /api/*  (Express)
-  ↕ WS     :4001   (ws)
+  ↕ WS     /ws     (ws)
 
 Node.js
-  ├── Kafka Consumer  ← market.ticks, orders.filled
-  ├── Kafka Producer  → orders.submitted
-  ├── Fill Simulator  (orders.submitted → fills → orders.filled)
-  ├── Price Engine    (GBM simulator → market.ticks)
+  ├── Trading Engine  (risk checks + order fills)
+  ├── Price Engine    (GBM simulator or live adapter → app ticks)
   └── PostgreSQL      (users, competitions, portfolios, orders)
 ```
+
+## Runtime Notes
+
+- `/health` is a liveness endpoint.
+- `/ready` returns 200 only when the market-data engine is running and the single-instance DB lock is held.
+- If the DB advisory lock connection is lost, the process exits rather than continuing in a potentially split-brain state.

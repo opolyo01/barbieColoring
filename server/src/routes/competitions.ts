@@ -194,9 +194,14 @@ router.delete('/:id/enrollments/:targetUserId', requireAuth, async (req, res: Re
 
 router.delete('/:id', requireAuth, async (req, res: Response) => {
   const userId = req.userId!;
-  const deleted = await deleteCompetition(req.params.id, userId);
-  if (!deleted) { res.status(404).json({ error: 'Not found or not your competition' }); return; }
-  res.json({ ok: true });
+  try {
+    const deleted = await deleteCompetition(req.params.id, userId);
+    if (!deleted) { res.status(404).json({ error: 'Not found or not your competition' }); return; }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Failed to delete competition', req.params.id, err);
+    res.status(500).json({ error: 'Failed to delete competition' });
+  }
 });
 
 router.get('/:id/leaderboard', requireAuth, async (req, res: Response) => {

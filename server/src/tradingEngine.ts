@@ -1,12 +1,9 @@
-import kafka, { TOPICS } from './client';
-import { publishOrderFilled } from './producer';
-import { fillOrder, rejectOrder, recordTrade, getAllPendingLimitOrders, getAllPendingMarketOrders } from '../db/queries/orders';
-import { getPortfolio, getHoldings, applyFill } from '../db/queries/portfolio';
-import { getCompetition } from '../db/queries/competitions';
-import { sendToUser } from '../ws/server';
-import { Holding, Order } from '../types';
+import { fillOrder, rejectOrder, recordTrade, getAllPendingLimitOrders, getAllPendingMarketOrders } from './db/queries/orders';
+import { getPortfolio, getHoldings, applyFill } from './db/queries/portfolio';
+import { getCompetition } from './db/queries/competitions';
+import { sendToUser } from './ws/server';
+import { Holding, Order } from './types';
 
-// In-memory latest prices (updated on every tick)
 const latestPrices = new Map<string, number>();
 
 export function updatePrice(symbol: string, price: number): void {
@@ -87,77 +84,54 @@ export async function executeFill(order: Order, fillPrice: number): Promise<Fill
   const filled = await fillOrder(order.id, fillPrice);
   if (!filled) return { ok: false, reason: 'Order no longer pending' };
 
-  // qty sign convention: BUY → positive delta, SELL → negative delta
   const qty = Number(order.qty);
   const qtyDelta = order.side === 'BUY' ? qty : -qty;
   await applyFill(portfolio.id, order.symbol, qtyDelta, fillPrice);
   await recordTrade(order.id, order.user_id, order.competition_id, order.symbol, order.side, qty, fillPrice);
-  await publishOrderFilled(order, fillPrice);
+  sendToUser(order.user_id, { type: 'filled', data: filled });
 
   return { ok: true };
 }
 
-export async function startFillSimulator(): Promise<void> {
-  const consumer = kafka.consumer({ groupId: 'trading-fill-simulator', allowAutoTopicCreation: true });
-
-  await consumer.connect();
-  await consumer.subscribe({ topic: TOPICS.ORDERS_SUBMITTED, fromBeginning: false });
-
-  await consumer.run({
-    eachMessage: async ({ message }) => {
-      if (!message.value) return;
-      try {
-        const order: Order = JSON.parse(message.value.toString());
-
-        if (order.order_type === 'MARKET') {
-          const price = latestPrices.get(order.symbol);
-          if (!price) {
-            await rejectOrder(order.id);
-            return;
-          }
-          await executeFill(order, price);
-        }
-        // LIMIT orders are handled by checkLimitOrders() on each tick
-      } catch (err) {
-        console.error('Fill simulator error:', err);
-      }
-    },
-  });
-}
-
 let lastCheck = 0;
+let checkInFlight = false;
 
-// Called on every tick but throttled to once per second to avoid pool exhaustion
-export async function checkLimitOrders(): Promise<void> {
+export async function checkPendingOrders(): Promise<void> {
   const now = Date.now();
-  if (now - lastCheck < 900) return;
+  if (checkInFlight || now - lastCheck < 900) return;
   lastCheck = now;
-  const [limitOrders, marketOrders] = await Promise.all([
-    getAllPendingLimitOrders(),
-    getAllPendingMarketOrders(),
-  ]);
+  checkInFlight = true;
 
-  for (const order of marketOrders) {
-    const price = latestPrices.get(order.symbol);
-    if (!price) {
-      await reject(order, `No price available for ${order.symbol}`);
-      continue;
-    }
-    await executeFill(order, price);
-  }
+  try {
+    const [limitOrders, marketOrders] = await Promise.all([
+      getAllPendingLimitOrders(),
+      getAllPendingMarketOrders(),
+    ]);
 
-  for (const order of limitOrders) {
-    if (!order.limit_price) continue;
-    const price = latestPrices.get(order.symbol);
-    if (!price) continue;
-
-    const limitPrice = Number(order.limit_price);
-    const shouldFill =
-      (order.side === 'BUY' && price <= limitPrice) ||
-      (order.side === 'SELL' && price >= limitPrice);
-
-    if (shouldFill) {
+    for (const order of marketOrders) {
+      const price = latestPrices.get(order.symbol);
+      if (!price) {
+        await reject(order, `No price available for ${order.symbol}`);
+        continue;
+      }
       await executeFill(order, price);
     }
+
+    for (const order of limitOrders) {
+      if (!order.limit_price) continue;
+      const price = latestPrices.get(order.symbol);
+      if (!price) continue;
+
+      const limitPrice = Number(order.limit_price);
+      const shouldFill =
+        (order.side === 'BUY' && price <= limitPrice) ||
+        (order.side === 'SELL' && price >= limitPrice);
+
+      if (shouldFill) {
+        await executeFill(order, price);
+      }
+    }
+  } finally {
+    checkInFlight = false;
   }
 }

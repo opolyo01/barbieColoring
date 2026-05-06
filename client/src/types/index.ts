@@ -124,6 +124,7 @@ export interface SymbolInfo {
 
 // WebSocket messages
 export type WsMessage =
+  | { type: 'auth'; ok: boolean; message?: string }
   | { type: 'tick'; data: PriceTick }
   | { type: 'filled'; data: Order }
   | { type: 'order_rejected'; orderId: string; reason: string }

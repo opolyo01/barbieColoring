@@ -14,6 +14,8 @@ export interface MarketDataController {
   stop(): Promise<void>;
 }
 
+type TickHandler = (tick: import('../types').PriceTick) => void | Promise<void>;
+
 let activeProvider: MarketDataProvider = resolveMarketDataProvider();
 let simulatedTimer: ReturnType<typeof setInterval> | null = null;
 let polygonEngine: PolygonEngine | null = null;
@@ -57,7 +59,10 @@ export function getMarketDataProvider(): MarketDataProvider {
   return activeProvider;
 }
 
-export async function startMarketDataEngine(tickIntervalMs: number): Promise<MarketDataController> {
+export async function startMarketDataEngine(
+  tickIntervalMs: number,
+  onTick: TickHandler,
+): Promise<MarketDataController> {
   activeProvider = resolveMarketDataProvider();
 
   if (activeProvider === 'alpaca') {
@@ -73,6 +78,7 @@ export async function startMarketDataEngine(tickIntervalMs: number): Promise<Mar
       symbols: getSimulatedSymbols(),
       publishIntervalMs: Number(process.env.MARKET_DATA_PUBLISH_MS ?? tickIntervalMs),
       snapshotRefreshMs: Number(process.env.ALPACA_SNAPSHOT_REFRESH_MS ?? 60_000),
+      onTick,
     });
     await alpacaEngine.start();
 
@@ -101,6 +107,7 @@ export async function startMarketDataEngine(tickIntervalMs: number): Promise<Mar
       symbols: getSimulatedSymbols(),
       publishIntervalMs: Number(process.env.MARKET_DATA_PUBLISH_MS ?? tickIntervalMs),
       snapshotRefreshMs: Number(process.env.POLYGON_SNAPSHOT_REFRESH_MS ?? 60_000),
+      onTick,
     });
     await polygonEngine.start();
 
@@ -117,7 +124,7 @@ export async function startMarketDataEngine(tickIntervalMs: number): Promise<Mar
     };
   }
 
-  simulatedTimer = startSimulatedPriceEngine(tickIntervalMs);
+  simulatedTimer = startSimulatedPriceEngine(tickIntervalMs, onTick);
   console.log(`[marketData] Provider=simulated symbols=${getSimulatedSymbols().length}`);
 
   return {

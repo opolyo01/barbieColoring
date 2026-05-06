@@ -1,5 +1,4 @@
 import { PriceTick } from '../types';
-import { publishTick } from '../kafka/producer';
 
 // Initial prices and per-symbol volatility (annualized %)
 const SYMBOLS: Record<string, { price: number; volatility: number; drift: number }> = {
@@ -82,7 +81,10 @@ export function ensureSymbol(symbol: string): number {
 // Reset OHLC candle every minute
 let lastCandleReset = Date.now();
 
-export function startPriceEngine(tickIntervalMs: number): NodeJS.Timeout {
+export function startPriceEngine(
+  tickIntervalMs: number,
+  onTick: (tick: PriceTick) => void | Promise<void>,
+): NodeJS.Timeout {
   console.log(`Price engine started — ${Object.keys(SYMBOLS).length} symbols, ${tickIntervalMs}ms interval`);
 
   return setInterval(async () => {
@@ -123,8 +125,8 @@ export function startPriceEngine(tickIntervalMs: number): NodeJS.Timeout {
       };
 
       // Fire and forget — don't block the interval
-      publishTick(tick).catch((err: Error) => {
-        console.error(`Failed to publish tick for ${symbol}:`, err.message);
+      Promise.resolve(onTick(tick)).catch((err: Error) => {
+        console.error(`Failed to process tick for ${symbol}:`, err.message);
       });
     }
   }, tickIntervalMs);

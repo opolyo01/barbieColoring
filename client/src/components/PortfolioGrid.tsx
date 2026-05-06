@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import '../agGridSetup';
 import { AgGridReact } from 'ag-grid-react';
 import {
   themeQuartz,
@@ -130,8 +131,9 @@ export default function PortfolioGrid({
       const last = prices.get(h.symbol) ?? Number(h.current_price ?? 0);
       const mktValue = qty * last;
       const absQty = Math.abs(qty);
-      const pnl = qty >= 0 ? (last - avgCost) * qty : (avgCost - last) * absQty;
-      const pnlPct = avgCost > 0 ? (pnl / (absQty * avgCost)) * 100 : 0;
+      const entryMovePerShare = qty >= 0 ? (last - avgCost) : (avgCost - last);
+      const pnl = entryMovePerShare * absQty;
+      const pnlPct = avgCost > 0 ? (entryMovePerShare / avgCost) * 100 : 0;
       const dayOpen = tick?.open ?? null;
       const dayVolume = (ticks.get(h.symbol) ?? []).reduce((s, t) => s + t.volume, 0);
 
@@ -150,8 +152,8 @@ export default function PortfolioGrid({
         dayLow: tick?.low ?? null,
         dayChgPct: dayOpen && dayOpen > 0 ? ((last / dayOpen) - 1) * 100 : null,
         dayVolume: dayVolume > 0 ? dayVolume : null,
-        chgDollar: last - avgCost,
-        chgPct: avgCost > 0 ? ((last - avgCost) / avgCost) * 100 : 0,
+        chgDollar: entryMovePerShare,
+        chgPct: pnlPct,
         mktValue,
         costBasis: absQty * avgCost,
         weight: totalPortfolio > 0 ? (Math.abs(mktValue) / totalPortfolio) * 100 : null,

@@ -1,5 +1,4 @@
 import WebSocket, { RawData } from 'ws';
-import { publishTick } from '../kafka/producer';
 import { PriceTick } from '../types';
 
 type PolygonFeed = 'delayed' | 'realtime';
@@ -12,6 +11,7 @@ interface PolygonEngineOptions {
   symbols: string[];
   publishIntervalMs: number;
   snapshotRefreshMs: number;
+  onTick: (tick: PriceTick) => void | Promise<void>;
 }
 
 interface SymbolState extends PriceTick {
@@ -90,6 +90,7 @@ export class PolygonEngine {
   private readonly includeQuotes: boolean;
   private readonly publishIntervalMs: number;
   private readonly snapshotRefreshMs: number;
+  private readonly onTick: (tick: PriceTick) => void | Promise<void>;
   private readonly restBaseUrl: string;
   private readonly trackedSymbols = new Set<string>();
   private readonly states = new Map<string, SymbolState>();
@@ -109,6 +110,7 @@ export class PolygonEngine {
     this.includeQuotes = options.feed === 'realtime';
     this.publishIntervalMs = Math.max(options.publishIntervalMs, 250);
     this.snapshotRefreshMs = Math.max(options.snapshotRefreshMs, 5_000);
+    this.onTick = options.onTick;
     this.restBaseUrl = options.vendor === 'massive'
       ? 'https://api.massive.com'
       : 'https://api.polygon.io';
@@ -207,8 +209,8 @@ export class PolygonEngine {
           ts: state.ts,
         };
 
-        publishTick(tick).catch((err: Error) => {
-          console.error(`[marketData] Failed to publish tick for ${tick.symbol}:`, err.message);
+        Promise.resolve(this.onTick(tick)).catch((err: Error) => {
+          console.error(`[marketData] Failed to process tick for ${tick.symbol}:`, err.message);
         });
       }
     }, this.publishIntervalMs);

@@ -210,9 +210,34 @@ export async function unenrollUser(userId: string, competitionId: string): Promi
 }
 
 export async function deleteCompetition(id: string, createdBy: string): Promise<boolean> {
-  const result = await pool.query(
-    'DELETE FROM competitions WHERE id = $1 AND created_by = $2',
-    [id, createdBy],
-  );
-  return (result.rowCount ?? 0) > 0;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query<{ id: string }>(
+      'SELECT id FROM competitions WHERE id = $1 AND created_by = $2 FOR UPDATE',
+      [id, createdBy],
+    );
+
+    if (!rows[0]) {
+      await client.query('ROLLBACK');
+      return false;
+    }
+
+    await client.query('DELETE FROM trades WHERE competition_id = $1', [id]);
+    await client.query('DELETE FROM orders WHERE competition_id = $1', [id]);
+
+    const result = await client.query(
+      'DELETE FROM competitions WHERE id = $1 AND created_by = $2',
+      [id, createdBy],
+    );
+
+    await client.query('COMMIT');
+    return (result.rowCount ?? 0) > 0;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }

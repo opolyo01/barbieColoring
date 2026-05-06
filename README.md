@@ -2,7 +2,7 @@
 
 Compete against others using a virtual trading book. Each user gets a configurable starting balance (default $1M), places real-time buy/sell/short orders, and the leaderboard ranks everyone by portfolio P&L. Best performance wins when the competition closes.
 
-**Stack:** React + TypeScript · Node.js + TypeScript · Kafka (KRaft) · WebSockets · PostgreSQL
+**Stack:** React + TypeScript · Node.js + TypeScript · WebSockets · PostgreSQL
 
 ---
 
@@ -24,7 +24,7 @@ Authentication uses Google OAuth — no username/password.
 ## Running Locally
 
 ### Prerequisites
-- [Docker](https://docs.docker.com/get-docker/) (for Kafka + Postgres)
+- [Docker](https://docs.docker.com/get-docker/) (for Postgres)
 - Node.js 18+
 
 ### 1. Start infrastructure
@@ -34,7 +34,6 @@ docker compose up -d
 ```
 
 This starts:
-- **Kafka** on `localhost:9092` (KRaft mode — no Zookeeper)
 - **PostgreSQL** on `localhost:5432`
 
 ### 2. Start the server
@@ -43,7 +42,7 @@ This starts:
 cd server
 cp .env.example .env       # fill in GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET
 npm install
-npm run dev                # http://localhost:4000  |  ws://localhost:4001
+npm run dev                # http://localhost:4000  |  ws://localhost:4000/ws
 ```
 
 The server auto-applies the DB schema on first start.
@@ -84,23 +83,17 @@ Open [http://localhost:3000](http://localhost:3000), sign in with Google, create
 ### Stopping
 
 ```bash
-docker compose down        # stop Kafka + Postgres (keeps data)
+docker compose down        # stop Postgres (keeps data)
 docker compose down -v     # stop and wipe all data
 ```
 
 ---
 
-## Deploying Remotely (Free Tier)
+## Deploying Remotely
 
-The recommended free stack is **Railway** (server + Postgres) + **Upstash** (Kafka) + **Vercel** (client).
+The recommended stack is **Railway** (server + Postgres) + **Vercel** (client).
 
-### Step 1 — Upstash Kafka
-
-1. Create a free account at [upstash.com](https://upstash.com)
-2. Create a new **Kafka** cluster (free tier: 10k messages/day)
-3. Note down: **Bootstrap URL**, **Username**, **Password**
-
-### Step 2 — Railway (server + Postgres)
+### Step 1 — Railway (server + Postgres)
 
 1. Go to [railway.app](https://railway.app) and create a new project
 2. Add a **PostgreSQL** plugin — Railway gives you a connection URL automatically
@@ -110,24 +103,22 @@ The recommended free stack is **Railway** (server + Postgres) + **Upstash** (Kaf
 ```
 DATABASE_URL        = <Railway Postgres connection URL>
 JWT_SECRET          = <any random 32+ character string>
-KAFKA_BROKERS       = <Upstash bootstrap URL>
-KAFKA_USERNAME      = <Upstash username>
-KAFKA_PASSWORD      = <Upstash password>
+SINGLE_INSTANCE_LOCK_ID = 42424201
 SERVER_URL          = https://your-server.railway.app
 CLIENT_ORIGIN       = https://your-app.vercel.app
 GOOGLE_CLIENT_ID    = <from Google Console>
 GOOGLE_CLIENT_SECRET= <from Google Console>
 PORT                = 4000
-WS_PORT             = 4000
 TICK_INTERVAL_MS    = 1000
 ```
 
 5. Set build command: `npm install && npm run build`
 6. Set start command: `npm start`
+7. Keep the service at **1 replica / 1 active instance**. This app now enforces a single-instance DB advisory lock and is intentionally not designed for active-active backend replicas.
 
-> **WebSocket on Railway:** Set `WS_PORT=4000` to match `PORT` — Railway proxies both HTTP and WebSocket on the same port.
+> **WebSocket on Railway:** the app now serves WebSockets on the same port as HTTP at `/ws`.
 
-### Step 3 — Vercel (client)
+### Step 2 — Vercel (client)
 
 1. Go to [vercel.com](https://vercel.com) and import this GitHub repo
 2. Set **Root Directory** to `client`
@@ -135,7 +126,7 @@ TICK_INTERVAL_MS    = 1000
 
 ```
 VITE_API_URL   = https://your-server.railway.app
-VITE_WS_URL    = wss://your-server.railway.app
+VITE_WS_URL    = wss://your-server.railway.app/ws
 ```
 
 4. Build command: `npm run build`
@@ -151,19 +142,16 @@ VITE_WS_URL    = wss://your-server.railway.app
 | Variable | Description | Default |
 |---|---|---|
 | `PORT` | HTTP server port | `4000` |
-| `WS_PORT` | WebSocket server port | `4001` |
 | `JWT_SECRET` | Secret for signing JWTs | — |
 | `SERVER_URL` | Public URL of this server | `http://localhost:4000` |
 | `CLIENT_ORIGIN` | Frontend URL (CORS + OAuth redirect) | `http://localhost:3000` |
 | `DATABASE_URL` | PostgreSQL connection string | — |
-| `KAFKA_BROKERS` | Comma-separated broker addresses | `localhost:9092` |
-| `KAFKA_USERNAME` | Kafka SASL username (Upstash) | — |
-| `KAFKA_PASSWORD` | Kafka SASL password (Upstash) | — |
+| `SINGLE_INSTANCE_LOCK_ID` | PostgreSQL advisory lock ID used to enforce one active backend instance | `42424201` |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID | — |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | — |
 | `TICK_INTERVAL_MS` | Price tick frequency in ms | `1000` |
 | `MARKET_DATA_PROVIDER` | `simulated`, `alpaca`, `polygon`, or `massive` | `simulated` |
-| `MARKET_DATA_PUBLISH_MS` | Tick publish cadence into Kafka/UI | `1000` |
+| `MARKET_DATA_PUBLISH_MS` | Tick publish cadence into the app UI/order checker | `1000` |
 | `ALPACA_API_KEY` | Alpaca market-data API key | — |
 | `ALPACA_API_SECRET` | Alpaca market-data API secret | — |
 | `ALPACA_SNAPSHOT_REFRESH_MS` | Snapshot resync cadence for Alpaca mode | `60000` |
@@ -177,7 +165,7 @@ VITE_WS_URL    = wss://your-server.railway.app
 | Variable | Description | Default |
 |---|---|---|
 | `VITE_API_URL` | Server HTTP base URL | `http://localhost:4000` |
-| `VITE_WS_URL` | Server WebSocket URL | `ws://localhost:4001` |
+| `VITE_WS_URL` | Server WebSocket URL | `ws://localhost:4000/ws` |
 
 ---
 
@@ -188,23 +176,15 @@ Browser (React)
   │
   ├─ REST  /api/*  ──────────► Express (Node.js)
   │                                 │
-  └─ WebSocket :4001 ◄──────────────┤
+  └─ WebSocket /ws ◄────────────────┤
                                     │
                           ┌─────────┼─────────┐
                           │         │         │
-                       Kafka     Postgres  Price
-                     Consumer/   (users,  Engine
-                     Producer  portfolios, (GBM sim)
-                               orders)
+                    Trading      Postgres  Market Data
+                     Engine      (users,    Engine
+                  (fills/risk) portfolios, (sim / Alpaca /
+                                 orders)    Polygon/Massive)
 ```
-
-**Kafka topics:**
-
-| Topic | Direction | Content |
-|---|---|---|
-| `market.ticks` | Engine → UI | Live OHLCV ticks per symbol |
-| `orders.submitted` | UI → Simulator | New orders to process |
-| `orders.filled` | Simulator → UI | Fill confirmations |
 
 ---
 
@@ -227,5 +207,16 @@ Each live adapter:
 
 - hydrates initial symbol state from provider snapshots
 - streams trade and quote updates over WebSocket
-- synthesizes app-level `PriceTick` events and publishes them to Kafka
+- synthesizes app-level `PriceTick` events and hands them directly to the server runtime
 - keeps the same downstream interfaces used by portfolio marks, leaderboard updates, and order fills
+
+## Single-Instance Production
+
+The no-Kafka architecture is intentionally hardened for **one active backend instance per database**.
+
+- Startup acquires a PostgreSQL advisory lock and exits if another instance already holds it.
+- `/health` reports liveness and lock state.
+- `/ready` only goes green after market data is up and the single-instance lock is held.
+- If the lock connection is lost, the process shuts itself down rather than continuing in a split-brain state.
+
+This is the right tradeoff for a simpler deployment, but it means you should **not** run multiple active app replicas against the same database.

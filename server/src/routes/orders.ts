@@ -3,7 +3,7 @@ import { requireAuth } from '../middleware/auth';
 import { OrderSide, OrderType } from '../types';
 import { createOrder, getTradeHistory, cancelOrder } from '../db/queries/orders';
 import { getEnrollment } from '../db/queries/competitions';
-import { getLatestPrice, updatePrice, executeFill } from '../kafka/fillSimulator';
+import { getLatestPrice, updatePrice, executeFill } from '../tradingEngine';
 import { ensureSymbol } from '../marketData';
 
 const router = Router();
@@ -46,7 +46,7 @@ router.post('/', requireAuth, async (req, res: Response) => {
     return;
   }
 
-  // Ensure symbol is tracked by the price engine; seed fillSimulator cache if new
+  // Ensure symbol is tracked by the market data engine; seed the in-process price cache if new.
   const sym = symbol.toUpperCase();
   let currentPrice = getLatestPrice(sym);
   if (!currentPrice) {
@@ -66,7 +66,7 @@ router.post('/', requireAuth, async (req, res: Response) => {
 
   // MARKET orders: fill synchronously right now so the caller gets an immediate
   // accept/reject decision against the current risk rules.
-  // LIMIT orders: left as pending; checkLimitOrders() picks them up on each tick.
+  // LIMIT orders: left as pending; the trading engine re-checks them on each tick.
   if (orderType === 'MARKET') {
     try {
       const result = await executeFill(order, currentPrice);

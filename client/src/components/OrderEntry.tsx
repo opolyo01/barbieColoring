@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import '../agGridSetup';
 import { AgGridReact } from 'ag-grid-react';
 import {
   themeQuartz,

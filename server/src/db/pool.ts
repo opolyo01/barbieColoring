@@ -1,10 +1,9 @@
 import { Pool } from 'pg';
+import { DATABASE_SSL, DATABASE_URL } from '../config';
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('railway') || process.env.DATABASE_URL?.includes('render')
-    ? { rejectUnauthorized: false }
-    : false,
+  connectionString: DATABASE_URL,
+  ssl: DATABASE_SSL,
   max: 10,
   idleTimeoutMillis: 30000,
 });

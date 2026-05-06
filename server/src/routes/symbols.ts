@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { getSymbols, getLatestPrices, ensureSymbol } from '../marketData';
-import { updatePrice } from '../kafka/fillSimulator';
+import { updatePrice } from '../tradingEngine';
 
 const router = Router();
 

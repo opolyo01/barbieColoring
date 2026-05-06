@@ -3,27 +3,24 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import pool from '../db/pool';
 import { User } from '../types';
+import { CLIENT_ORIGIN, JWT_SECRET, SERVER_URL } from '../config';
 
 const router = Router();
-
-const JWT_SECRET = () => process.env.JWT_SECRET ?? 'secret';
-const SERVER_URL = () => process.env.SERVER_URL ?? 'http://localhost:4000';
-const CLIENT_ORIGIN = () => process.env.CLIENT_ORIGIN ?? 'http://localhost:3000';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function issueAppToken(userId: string): string {
-  return jwt.sign({ userId }, JWT_SECRET(), { expiresIn: '30d' });
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '30d' });
 }
 
 // Signed, expiring state param — prevents CSRF without needing server-side sessions
 function generateState(): string {
-  return jwt.sign({ nonce: crypto.randomBytes(16).toString('hex') }, JWT_SECRET(), { expiresIn: '10m' });
+  return jwt.sign({ nonce: crypto.randomBytes(16).toString('hex') }, JWT_SECRET, { expiresIn: '10m' });
 }
 
 function verifyState(state: string): boolean {
   try {
-    jwt.verify(state, JWT_SECRET());
+    jwt.verify(state, JWT_SECRET);
     return true;
   } catch {
     return false;
@@ -50,15 +47,20 @@ async function upsertOAuthUser(
 }
 
 function redirectError(res: Response, message: string): void {
-  res.redirect(`${CLIENT_ORIGIN()}/login?error=${encodeURIComponent(message)}`);
+  res.redirect(`${CLIENT_ORIGIN}/login?error=${encodeURIComponent(message)}`);
 }
 
 // ─── Google ──────────────────────────────────────────────────────────────────
 
 router.get('/google', (_req: Request, res: Response) => {
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    redirectError(res, 'Google OAuth is not configured on the server');
+    return;
+  }
+
   const params = new URLSearchParams({
     client_id:     process.env.GOOGLE_CLIENT_ID ?? '',
-    redirect_uri:  `${SERVER_URL()}/api/auth/google/callback`,
+    redirect_uri:  `${SERVER_URL}/api/auth/google/callback`,
     response_type: 'code',
     scope:         'openid email profile',
     access_type:   'online',
@@ -82,7 +84,7 @@ router.get('/google/callback', async (req: Request, res: Response) => {
         code,
         client_id:     process.env.GOOGLE_CLIENT_ID ?? '',
         client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-        redirect_uri:  `${SERVER_URL()}/api/auth/google/callback`,
+        redirect_uri:  `${SERVER_URL}/api/auth/google/callback`,
         grant_type:    'authorization_code',
       }),
     });
@@ -97,7 +99,7 @@ router.get('/google/callback', async (req: Request, res: Response) => {
 
     const user = await upsertOAuthUser('google', profile.sub, profile.name ?? profile.email, profile.email);
     const token = issueAppToken(user.id);
-    res.redirect(`${CLIENT_ORIGIN()}/auth/callback?token=${token}`);
+    res.redirect(`${CLIENT_ORIGIN}/auth/callback#token=${encodeURIComponent(token)}`);
   } catch (err) {
     console.error('Google OAuth error:', err);
     redirectError(res, 'Google sign-in failed');
@@ -111,7 +113,7 @@ router.get('/me', async (req: Request, res: Response) => {
   if (!header?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing token' }); return; }
 
   try {
-    const { userId } = jwt.verify(header.slice(7), JWT_SECRET()) as { userId: string };
+    const { userId } = jwt.verify(header.slice(7), JWT_SECRET) as { userId: string };
     const { rows } = await pool.query<User>(
       'SELECT id, email, display_name, created_at FROM users WHERE id = $1',
       [userId],

@@ -99,8 +99,9 @@ export interface LeaderboardEntry {
 
 // WebSocket message types (server → client)
 export type WsServerMessage =
+  | { type: 'auth'; ok: boolean; message?: string }
   | { type: 'tick'; data: PriceTick }
-  | { type: 'filled'; data: Trade }
+  | { type: 'filled'; data: Order }
   | { type: 'order_rejected'; orderId: string; reason: string }
   | { type: 'leaderboard'; competitionId: string; rankings: LeaderboardEntry[] }
   | { type: 'error'; message: string };
