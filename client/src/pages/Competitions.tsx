@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 import { Competition } from '../types';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -330,22 +332,26 @@ export default function Competitions() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Start Date *</label>
-                  <input
-                    required
-                    type="date"
-                    value={form.startDate}
-                    onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
+                  <DatePicker
+                    selected={form.startDate ? new Date(form.startDate) : null}
+                    onChange={(date: Date | null) => setForm((f) => ({ ...f, startDate: date ? date.toISOString().split('T')[0] : '' }))}
+                    dateFormat="MM/dd/yyyy"
+                    placeholderText="Select start date"
                     className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-accent"
+                    wrapperClassName="w-full"
+                    minDate={new Date()}
                   />
                 </div>
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">End Date *</label>
-                  <input
-                    required
-                    type="date"
-                    value={form.endDate}
-                    onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
+                  <DatePicker
+                    selected={form.endDate ? new Date(form.endDate) : null}
+                    onChange={(date: Date | null) => setForm((f) => ({ ...f, endDate: date ? date.toISOString().split('T')[0] : '' }))}
+                    dateFormat="MM/dd/yyyy"
+                    placeholderText="Select end date"
                     className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-accent"
+                    wrapperClassName="w-full"
+                    minDate={form.startDate ? new Date(form.startDate) : new Date()}
                   />
                 </div>
               </div>
