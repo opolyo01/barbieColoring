@@ -3,7 +3,7 @@ import { DATABASE_SSL, DATABASE_URL } from '../config';
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: DATABASE_SSL,
+  ssl: DATABASE_SSL ? { rejectUnauthorized: false } : false,
   max: 10,
   idleTimeoutMillis: 30000,
 });
