@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import express from 'express';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
+import express, { type Express } from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 
@@ -40,11 +40,14 @@ vi.mock('../marketData', () => ({
   getLatestPrices: vi.fn().mockReturnValue(new Map()),
 }));
 
-const competitionsRouter = (await import('../routes/competitions')).default;
+let app: Express;
 
-const app = express();
-app.use(express.json());
-app.use('/api/competitions', competitionsRouter);
+beforeAll(async () => {
+  const competitionsRouter = (await import('../routes/competitions')).default;
+  app = express();
+  app.use(express.json());
+  app.use('/api/competitions', competitionsRouter);
+});
 
 describe('GET /api/competitions', () => {
   it('returns 401 when no auth token is provided', async () => {
