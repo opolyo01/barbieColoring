@@ -124,6 +124,10 @@ async function handleClientMessage(socket: AuthenticatedSocket, msg: WsClientMes
       socket.subscriptions.delete(msg.competitionId);
       break;
     }
+    case 'ping': {
+      sendToSocket(socket, { type: 'pong' });
+      break;
+    }
   }
 }
 

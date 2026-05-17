@@ -129,4 +129,5 @@ export type WsMessage =
   | { type: 'filled'; data: Order }
   | { type: 'order_rejected'; orderId: string; reason: string }
   | { type: 'leaderboard'; competitionId: string; rankings: LeaderboardEntry[] }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'pong' };

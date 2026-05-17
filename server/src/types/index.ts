@@ -104,13 +104,15 @@ export type WsServerMessage =
   | { type: 'filled'; data: Order }
   | { type: 'order_rejected'; orderId: string; reason: string }
   | { type: 'leaderboard'; competitionId: string; rankings: LeaderboardEntry[] }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'pong' };
 
 // WebSocket message types (client → server)
 export type WsClientMessage =
   | { type: 'auth'; token: string }
   | { type: 'subscribe'; competitionId: string }
-  | { type: 'unsubscribe'; competitionId: string };
+  | { type: 'unsubscribe'; competitionId: string }
+  | { type: 'ping' };
 
 declare global {
   namespace Express {
