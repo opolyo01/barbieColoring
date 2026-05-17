@@ -1,6 +1,6 @@
 import { test as base, expect, type Page } from '@playwright/test';
 
-const API_URL = 'http://localhost:4000';
+const API_URL = 'http://127.0.0.1:4000';
 const STORAGE_KEY = 'tradebattle_auth';
 
 export interface TestUser {

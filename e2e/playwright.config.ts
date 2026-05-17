@@ -24,7 +24,7 @@ export default defineConfig({
     {
       command: 'npm run dev',
       cwd: '../server',
-      url: 'http://localhost:4000/health',
+      url: 'http://127.0.0.1:4000/health',
       reuseExistingServer: true,
       timeout: 30_000,
       env: { NODE_ENV: 'development' },
