@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import pool from '../db/pool';
 import { User } from '../types';
-import { CLIENT_ORIGIN, JWT_SECRET, SERVER_URL } from '../config';
+import { CLIENT_ORIGIN, IS_PRODUCTION, JWT_SECRET, SERVER_URL } from '../config';
 import { authRateLimiter } from '../rateLimit';
 
 const router = Router();
@@ -124,6 +124,22 @@ router.get('/me', async (req: Request, res: Response) => {
     res.json(rows[0]);
   } catch {
     res.status(401).json({ error: 'Invalid token' });
+  }
+});
+
+// ─── Test-only bypass (never available in production) ────────────────────────
+
+router.post('/test-login', async (req: Request, res: Response) => {
+  if (IS_PRODUCTION) { res.status(404).end(); return; }
+  const { email, name } = req.body as { email?: string; name?: string };
+  if (!email) { res.status(400).json({ error: 'email required' }); return; }
+  try {
+    const user = await upsertOAuthUser('test', email, name ?? email, email);
+    const token = issueAppToken(user.id);
+    res.json({ token, user });
+  } catch (err) {
+    console.error('test-login error:', err);
+    res.status(500).json({ error: 'Failed to create test user' });
   }
 });
 
