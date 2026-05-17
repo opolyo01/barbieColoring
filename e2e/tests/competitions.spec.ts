@@ -56,7 +56,7 @@ test.describe('Competitions page', () => {
   test('join modal shows error for an invalid invite code', async ({ authedPage: page }) => {
     await page.getByRole('button', { name: /^Join/i }).first().click();
     await page.getByPlaceholder('AB12CD34EF56').fill('INVALID000');
-    await page.getByRole('button', { name: 'Join' }).click();
+    await page.getByRole('button', { name: 'Join', exact: true }).click();
     await expect(page.getByText(/invalid|not found|error/i)).toBeVisible({ timeout: 8000 });
   });
 
