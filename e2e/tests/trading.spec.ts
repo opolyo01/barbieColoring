@@ -47,9 +47,9 @@ test.describe('Trading room', () => {
 
   test('shows PM / Blotter / OE tabs', async ({ page }) => {
     await page.goto(`/competition/${competitionId}`);
-    await expect(page.getByRole('button', { name: 'PM' })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole('button', { name: 'Blotter' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'OE' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'PM', exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('button', { name: 'Blotter', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'OE', exact: true })).toBeVisible();
   });
 
   test('unenrolled user is redirected to competitions', async ({ page }) => {
