@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
-import express from 'express';
+import express, { type Express } from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 
 const TEST_SECRET = 'test-secret-key-that-is-long-enough-32chars';
 
-// Mock config before any module that imports it loads
 vi.mock('../config', () => ({
   JWT_SECRET: TEST_SECRET,
   DATABASE_URL: 'postgres://localhost/test',
@@ -15,13 +14,15 @@ vi.mock('../config', () => ({
   NODE_ENV: 'test',
 }));
 
-// Import after mock is in place
-const { requireAuth } = await import('../middleware/auth');
+let app: Express;
 
-const app = express();
-app.use(express.json());
-app.get('/protected', requireAuth, (_req, res) => {
-  res.json({ ok: true });
+beforeAll(async () => {
+  const { requireAuth } = await import('../middleware/auth');
+  app = express();
+  app.use(express.json());
+  app.get('/protected', requireAuth, (_req, res) => {
+    res.json({ ok: true });
+  });
 });
 
 describe('requireAuth middleware', () => {
